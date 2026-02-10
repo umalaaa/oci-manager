@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
     let config = OciConfig::load(cli.config)?;
     let profile_name = cli.profile.clone().unwrap_or_else(|| "DEFAULT".to_string());
-    
+
     // Attempt to load profile, but for Serve command we might withstand missing profile
     let profile_result = config.profile(Some(&profile_name));
 
@@ -37,20 +37,23 @@ async fn main() -> Result<()> {
         Command::Availability(args) => {
             let profile = profile_result?;
             let client = OciClient::new(profile.clone())?;
-            handle_availability(args, &client).await
+            handle_availability(*args, &client).await
         }
         Command::Serve(args) => {
             // If profile exists, use it. If not, try to use global props.
-            let (profile_enable_admin, profile_admin_key, profile_port) = match &profile_result {
-                Ok(p) => (Some(p.enable_admin), p.admin_key.clone(), p.port),
-                Err(_) => (None, None, None),
-            };
+            let (profile_enable_admin, profile_admin_key, profile_port) =
+                match &profile_result {
+                    Ok(p) => (Some(p.enable_admin), p.admin_key.clone(), p.port),
+                    Err(_) => (None, None, None),
+                };
 
             // Resolve enable_admin
             let enable_admin = if let Some(enabled) = profile_enable_admin {
                 enabled
             } else {
-                 config.global_props.get("enable_admin")
+                config
+                    .global_props
+                    .get("enable_admin")
                     .map(|v| v.as_deref().unwrap_or("false").eq_ignore_ascii_case("true"))
                     .unwrap_or(false)
             };
@@ -60,56 +63,58 @@ async fn main() -> Result<()> {
             }
 
             // Resolve admin_key
-            let config_admin_key = profile_admin_key.or_else(|| {
-                config.global_props.get("admin_key").and_then(|v| v.clone())
+            let config_admin_key = profile_admin_key
+                .or_else(|| config.global_props.get("admin_key").and_then(|v| v.clone()));
+
+            let admin_key = args.admin_key.or(config_admin_key).and_then(|value| {
+                let trimmed = value.trim().to_string();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
             });
 
-            let admin_key = args
-                .admin_key
-                .or(config_admin_key)
-                .and_then(|value| {
-                    let trimmed = value.trim().to_string();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed)
-                    }
-                });
-            
             if admin_key.is_none() {
                 bail!("admin_key is required (set admin_key in config or OCI_ADMIN_KEY).");
             }
 
             // Resolve port
             let config_port = profile_port.or_else(|| {
-                config.global_props.get("port")
+                config
+                    .global_props
+                    .get("port")
                     .and_then(|v| v.clone())
                     .and_then(|v| v.parse::<u16>().ok())
             });
             let port = config_port.unwrap_or(args.port);
 
             if !args.allow_remote && !is_loopback_host(&args.host) {
-                bail!("Refusing to bind to non-loopback address without --allow-remote ({})", args.host);
+                bail!(
+                    "Refusing to bind to non-loopback address without --allow-remote ({})",
+                    args.host
+                );
             }
-            
-            // If we have a profile, pass its name. If not, pass empty or 'DEFAULT' 
+
+            // If we have a profile, pass its name. If not, pass empty or 'DEFAULT'
             // web::serve will handle empty profiles map gracefully now.
-            let effective_profile_name = if profile_result.is_ok() { profile_name } else { "DEFAULT".to_string() };
+            let effective_profile_name = if profile_result.is_ok() {
+                profile_name
+            } else {
+                "DEFAULT".to_string()
+            };
             web::serve(config, effective_profile_name, admin_key, args.host, port).await
         }
         Command::Cron(args) => {
             let profile = profile_result?;
             let client = OciClient::new(profile.clone())?;
-            handle_cron(args, &client, &config).await
+            handle_cron(*args, &client, &config).await
         }
     }
 }
 
-async fn handle_instance(
-    command: InstanceCommand,
-    client: &OciClient,
-    profile: &config::Profile,
-) -> Result<()> {
+async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result<()> {
+    let profile = &client.profile;
     match command {
         InstanceCommand::List(args) => {
             let compartment = args
@@ -198,10 +203,7 @@ async fn handle_instance(
     Ok(())
 }
 
-async fn handle_availability(
-    args: AvailabilityArgs,
-    client: &OciClient,
-) -> Result<()> {
+async fn handle_availability(args: AvailabilityArgs, client: &OciClient) -> Result<()> {
     let compartment = args
         .compartment
         .or_else(|| client.profile.defaults.compartment.clone())
@@ -235,11 +237,7 @@ fn is_loopback_host(host: &str) -> bool {
         .unwrap_or(false)
 }
 
-async fn handle_cron(
-    args: CronArgs,
-    client: &OciClient,
-    config: &OciConfig,
-) -> Result<()> {
+async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> Result<()> {
     let profile = &client.profile;
     // Merge preset values if --preset is given
     let preset = if let Some(preset_name) = &args.preset {

@@ -99,7 +99,8 @@ pub async fn serve(
         );
     }
     let default_profile = default_profile.to_uppercase();
-    if !profiles.contains_key(&default_profile) {
+    if !profiles.is_empty() && !profiles.contains_key(&default_profile) {
+        // Only bail if we have profiles but the requested default isn't among them
         bail!("Default profile '{}' not found", default_profile);
     }
 
@@ -143,8 +144,6 @@ pub async fn serve(
     Ok(())
 }
 
-// ... (other imports remain, but I need to make sure I don't duplicate or miss them if I replace a block)
-// I better replace functions carefully.
 
 async fn index() -> impl IntoResponse {
     Redirect::to("/login")
@@ -168,7 +167,8 @@ async fn auth_middleware(
     };
 
     let path = request.uri().path();
-    if path == "/login" || path == "/" {
+    // Allow index and static assets (if any)
+    if path == "/" || path == "/login" {
         return next.run(request).await.into_response();
     }
 

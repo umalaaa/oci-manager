@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use configparser::ini::Ini;
 
 #[derive(Debug, Clone, serde::Serialize)]

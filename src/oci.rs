@@ -29,7 +29,7 @@ pub enum Service {
 }
 
 pub struct OciClient {
-    profile: Profile,
+    pub profile: Profile,
     http: reqwest::Client,
     signer: Signer,
 }
