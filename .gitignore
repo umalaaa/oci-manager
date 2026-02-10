@@ -5,7 +5,6 @@
 # ── Rust / Cargo ──────────────────────────────
 /target/
 **/*.rs.bk
-Cargo.lock
 
 # ── Secrets & Credentials (CRITICAL) ─────────
 # NEVER commit real OCI config or private keys
