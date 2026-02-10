@@ -17,6 +17,23 @@ echo "------------------------------------------------"
 
 # 1. Detection
 ARCH=$(uname -m)
+IS_ROOT=false
+if [ "$EUID" -eq 0 ]; then IS_ROOT=true; fi
+
+# Set Directories based on permissions
+if [ "$IS_ROOT" = true ]; then
+    INSTALL_DIR="/usr/local/bin"
+    CONF_DIR="/etc/oci-manager"
+    SERVICE_PATH="/etc/systemd/system/oci-manager.service"
+    SYSTEMCTL_CMD="systemctl"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+    CONF_DIR="$HOME/.oci-manager"
+    SERVICE_PATH="$HOME/.config/systemd/user/oci-manager.service"
+    SYSTEMCTL_CMD="systemctl --user"
+    mkdir -p "$HOME/.config/systemd/user"
+fi
+
 if [ "$ARCH" == "x86_64" ]; then
     TARGET="x86_64-unknown-linux-gnu"
     FILENAME="oci-manager-x86_64-unknown-linux-gnu.tar.gz"
@@ -56,17 +73,18 @@ if [ ! -f "./$BINARY_NAME" ]; then
     rm "$FILENAME"
 fi
 
-# 3. Setup Directories & Binary
+# 4. Setup Directories & Binary
 echo "Installing to $INSTALL_DIR..."
-sudo mkdir -p $CONF_DIR
-sudo cp "./$BINARY_NAME" "$INSTALL_DIR/"
-sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
+mkdir -p "$CONF_DIR"
+mkdir -p "$INSTALL_DIR"
+cp "./$BINARY_NAME" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-# 4. Check for config file
+# 5. Check for config file
 if [ ! -f "$CONF_DIR/config" ]; then
     echo "Creating initial config at $CONF_DIR/config"
     GEN_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
-    sudo bash -c "cat <<EOF > $CONF_DIR/config
+    cat <<EOF > "$CONF_DIR/config"
 # Web UI Settings
 enable_admin=true
 admin_key=$GEN_KEY
@@ -78,38 +96,41 @@ fingerprint=aa:bb:cc...
 tenancy=ocid1.tenancy.oc1..aaaaaaa
 region=us-phoenix-1
 key_file=$CONF_DIR/key.pem
-EOF"
+EOF
 fi
 
-# 5. Create Systemd Service
-echo "Configuring systemd service..."
-sudo bash -c "cat <<EOF > /etc/systemd/system/oci-manager.service
+# 6. Create Service
+echo "Configuring service at $SERVICE_PATH..."
+cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=OCI Manager Web Service
 After=network.target
 
 [Service]
 Type=simple
-User=root
 WorkingDirectory=$CONF_DIR
 ExecStart=$INSTALL_DIR/$BINARY_NAME --config $CONF_DIR/config serve --host 0.0.0.0 --port $PORT --allow-remote
 Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
-EOF"
+WantedBy=default.target
+EOF
 
-# 6. Finalize
-echo "$LATEST_VERSION" | sudo tee $CONF_DIR/version > /dev/null
-sudo systemctl daemon-reload
+# 7. Finalize
+echo "$LATEST_VERSION" > "$CONF_DIR/version"
+$SYSTEMCTL_CMD daemon-reload
 echo ""
 echo "Installation complete! / 安装完成！"
 echo "------------------------------------------------"
-echo "1. Edit config: sudo nano $CONF_DIR/config"
+echo "1. Edit config: nano $CONF_DIR/config"
 echo "2. Place your OCI API key (.pem) in: $CONF_DIR/key.pem"
-echo "3. Start service: sudo systemctl start oci-manager"
-echo "4. Enable on boot: sudo systemctl enable oci-manager"
+echo "3. Start service: $SYSTEMCTL_CMD start oci-manager"
+echo "4. Enable on boot: $SYSTEMCTL_CMD enable oci-manager"
+echo "5. Check status: $SYSTEMCTL_CMD status oci-manager"
+if [ "$IS_ROOT" = false ]; then
+    echo "Note: For non-root persistent service, run: sudo loginctl enable-linger \$USER"
+fi
 echo "------------------------------------------------"
 echo "Web UI will be at: http://YOUR_SERVER_IP:$PORT"
 echo "Default Admin Key (Keep it safe!): $GEN_KEY"

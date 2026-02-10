@@ -192,6 +192,14 @@ curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh 
 3. **Start**: `sudo systemctl enable --now oci-manager`
 4. **Access**: Open `http://your-server-ip:9927` in your browser.
 
+## Uninstallation
+
+To stop the service and remove all files (including configs):
+
+```bash
+curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/uninstall.sh | bash
+```
+
 
 ### Cron Mode (Background / Scheduled)
 
