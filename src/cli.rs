@@ -21,17 +21,17 @@ pub struct Cli {
 pub enum Command {
     #[command(subcommand)]
     Instance(InstanceCommand),
-    Availability(AvailabilityArgs),
-    Serve(ServeArgs),
+    Availability(Box<AvailabilityArgs>),
+    Serve(Box<ServeArgs>),
     /// Run a single create attempt (or retry loop) then exit.
     /// Designed for system cron / Windows Task Scheduler.
-    Cron(CronArgs),
+    Cron(Box<CronArgs>),
 }
 
 #[derive(Debug, Subcommand)]
 pub enum InstanceCommand {
     List(InstanceListArgs),
-    Create(InstanceCreateArgs),
+    Create(Box<InstanceCreateArgs>),
     Terminate(InstanceTerminateArgs),
     Reboot(InstanceRebootArgs),
 }

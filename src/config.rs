@@ -249,10 +249,10 @@ fn find_value(
 fn normalize_value(value: &str) -> String {
     let trimmed = value.trim();
     let no_comment = trimmed
-        .splitn(2, '#')
+        .split('#')
         .next()
         .unwrap_or(trimmed)
-        .splitn(2, ';')
+        .split(';')
         .next()
         .unwrap_or(trimmed)
         .trim();

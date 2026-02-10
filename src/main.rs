@@ -32,10 +32,12 @@ async fn main() -> Result<()> {
             handle_instance(cmd, &client, &profile).await?
         }
         Command::Availability(args) => {
+            let args = *args;
             let client = OciClient::new(profile.clone())?;
             handle_availability(args, &client, &profile).await?
         }
         Command::Serve(args) => {
+            let args = *args;
             if !profile.enable_admin {
                 bail!("Web UI is disabled. Set enable_admin=true in config.");
             }
@@ -64,6 +66,7 @@ async fn main() -> Result<()> {
             web::serve(config, profile_name, admin_key, args.host, port).await?;
         }
         Command::Cron(args) => {
+            let args = *args;
             let client = OciClient::new(profile.clone())?;
             handle_cron(args, &client, &profile, &config).await?
         }
@@ -99,6 +102,7 @@ async fn handle_instance(
             }
         }
         InstanceCommand::Create(args) => {
+            let args = *args;
             let retry_enabled =
                 args.retry || args.retry_seconds.is_some() || args.retry_max.is_some();
             let retry_seconds = args.retry_seconds.unwrap_or(180);

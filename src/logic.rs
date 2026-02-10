@@ -281,7 +281,7 @@ fn expand_tilde(value: &str) -> String {
 
 fn split_keys(value: &str) -> Vec<&str> {
     value
-        .split(|ch| ch == '\n' || ch == ',' || ch == ';')
+        .split(&['\n', ',', ';'][..])
         .collect()
 }
 

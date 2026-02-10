@@ -270,7 +270,7 @@ impl OciClient {
         &self,
         service: Service,
         path: &str,
-        query: &mut Vec<(String, String)>,
+        query: &mut [(String, String)],
     ) -> Result<(Url, String, String)> {
         let base = match service {
             Service::Compute | Service::VirtualNetwork => {
