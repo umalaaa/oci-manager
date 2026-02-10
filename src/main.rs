@@ -157,6 +157,7 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
                     image_version: args.image_version.clone(),
                     display_name: args.display_name.clone(),
                     ssh_key: args.ssh_key.clone(),
+                    retry_interval_secs: None,
                 };
                 let resolved =
                     resolve_create_payload(client, &profile.defaults, input, true).await?;
@@ -302,6 +303,7 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
                 .ssh_key
                 .clone()
                 .or_else(|| preset.and_then(|p| p.ssh_public_key.clone())),
+            retry_interval_secs: None,
         };
 
         let resolved = resolve_create_payload(client, &profile.defaults, input, true).await?;

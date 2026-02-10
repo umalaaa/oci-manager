@@ -26,6 +26,7 @@ pub struct CreateInput {
     pub image_version: Option<String>,
     pub display_name: Option<String>,
     pub ssh_key: Option<String>,
+    pub retry_interval_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

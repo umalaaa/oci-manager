@@ -389,6 +389,7 @@ async fn create_instance(
         image_version: payload.image_version,
         display_name: payload.display_name,
         ssh_key: payload.ssh_key,
+        retry_interval_secs: None,
     };
     let resolved = resolve_create_payload(&profile.client, &profile.defaults, input, false)
         .await
@@ -547,7 +548,7 @@ async fn queue_instance(
 
     tokio::spawn(async move {
         let mut attempts = 0;
-        let retry_interval: u64 = 60;
+        let retry_interval: u64 = input_clone.retry_interval_secs.unwrap_or(60).max(10);
         loop {
             // Check cancellation before each attempt
             if cancelled.load(Ordering::Relaxed) {

@@ -247,6 +247,10 @@
             <input id="sshKey" placeholder="ssh-ed25519 AAAA..." />
           </div>
         </div>
+        <div style="margin-top: 14px;">
+          <label data-i18n="retry_interval">Retry Interval (seconds)</label>
+          <input id="retryInterval" type="number" min="10" value="60" placeholder="60" style="max-width: 180px;" />
+        </div>
         <div class="actions" style="margin-top: 16px;">
           <button id="createBtn" onclick="createInstance()" disabled data-i18n="create_btn">Create</button>
         </div>
@@ -255,10 +259,6 @@
 
     <section class="panel">
       <h2 data-i18n="tasks_title">Tasks</h2>
-      <div class="actions" style="margin-bottom: 12px;">
-        <button class="secondary" onclick="loadTasks()" data-i18n="refresh_btn">Refresh</button>
-        <button class="secondary" onclick="clearFinishedTasks()" data-i18n="clear_finished_btn">Clear Finished</button>
-      </div>
       <table>
         <thead>
           <tr>
@@ -328,6 +328,7 @@
         display_name: "Display Name",
         ssh_key: "SSH Public Key",
         create_btn: "Create",
+        retry_interval: "Retry Interval (seconds)",
         tasks_title: "Tasks",
         refresh_btn: "Refresh",
         stop_btn: "Stop",
@@ -367,7 +368,7 @@
         queueing: "Queueing...",
         queued: "Task Queued: ",
         confirm_stop: "Stop task?",
-        clear_finished_btn: "Clear Finished",
+
         delete_btn: "Delete",
         select_shape_first: "Select shape first",
         error_prefix: "Error: ",
@@ -390,6 +391,7 @@
         display_name: "实例名称",
         ssh_key: "SSH 公钥",
         create_btn: "创建",
+        retry_interval: "重试间隔（秒）",
         tasks_title: "任务列表",
         refresh_btn: "刷新列表",
         stop_btn: "停止",
@@ -429,7 +431,7 @@
         queueing: "提交中...",
         queued: "任务已提交: ",
         confirm_stop: "确定停止任务吗？",
-        clear_finished_btn: "清理已完成",
+
         delete_btn: "删除",
         select_shape_first: "请先选择配置",
         error_prefix: "错误: ",
@@ -569,7 +571,8 @@
         image_os: value("imageOs"),
         image_version: value("imageVersion"),
         display_name: value("displayName"),
-        ssh_key: value("sshKey")
+        ssh_key: value("sshKey"),
+        retry_interval_secs: numberValue("retryInterval")
       };
 
       const shapeName = payload.shape ? payload.shape.toUpperCase() : "";
@@ -723,14 +726,7 @@
       loadTasks();
     }
 
-    async function clearFinishedTasks() {
-      const response = await fetch("/api/tasks", { method: "DELETE" });
-      if (!response.ok) {
-        alert(await response.text());
-        return;
-      }
-      loadTasks();
-    }
+
 
     async function terminateInstance(id) {
       const profile = selectedProfile();

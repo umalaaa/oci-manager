@@ -135,5 +135,7 @@ if [ "$IS_ROOT" = false ]; then
 fi
 echo "------------------------------------------------"
 echo "Web UI will be at: http://YOUR_SERVER_IP:$PORT"
-echo "Default Admin Key (Keep it safe!): $GEN_KEY"
+if [ -n "$GEN_KEY" ]; then
+    echo "Default Admin Key (Keep it safe!): $GEN_KEY"
+fi
 echo "------------------------------------------------"
