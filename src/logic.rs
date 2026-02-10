@@ -280,9 +280,7 @@ fn expand_tilde(value: &str) -> String {
 }
 
 fn split_keys(value: &str) -> Vec<&str> {
-    value
-        .split(&['\n', ',', ';'][..])
-        .collect()
+    value.split(&['\n', ',', ';'][..]).collect()
 }
 
 fn looks_like_ssh_key(value: &str) -> bool {
