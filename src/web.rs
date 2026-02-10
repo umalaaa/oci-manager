@@ -21,6 +21,7 @@ use crate::models::{AvailabilityDomain, InstanceSummary, Shape, SubnetSummary};
 use crate::oci::OciClient;
 
 #[derive(Clone, Serialize)]
+#[allow(dead_code)]
 enum TaskStatus {
     Pending,
     Running,
