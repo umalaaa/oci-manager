@@ -176,6 +176,28 @@ Open `http://127.0.0.1:8080`, enter your `admin_key`, and use the UI to:
 - Queue tasks with automatic retry (and **Stop** them)
 - View, reboot, and terminate running instances
 
+---
+
+## Linux Automated Installation (Ubuntu/CentOS/Oracle Linux)
+
+For production setup with **systemd** (ARM64 or x64):
+
+1. **Download binary & script**: Get the appropriate `oci-manager` binary for your architecture from [Releases](../../releases) and the `install.sh` script.
+2. **Run Installer**:
+   ```bash
+   chmod +x install.sh
+   sudo ./install.sh
+   ```
+3. **Configure**:
+   - Edit `/etc/oci-manager/config` with your OCI credentials.
+   - Place your API `.pem` key at `/etc/oci-manager/key.pem`.
+4. **Start Service**:
+   ```bash
+   sudo systemctl enable --now oci-manager
+   ```
+   *Web UI will be live at `http://your-server-ip:8080`*
+
+
 ### Cron Mode (Background / Scheduled)
 
 The `cron` subcommand runs a single create attempt (or retry loop) and exits. Perfect for system schedulers:
