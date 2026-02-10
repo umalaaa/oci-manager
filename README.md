@@ -4,154 +4,94 @@ A fast, single-binary CLI + Web UI for managing Oracle Cloud Infrastructure (OCI
 
 ## Features
 
-- **Multi-profile support** — manage multiple OCI tenancies from a single config file
 - **Create / Terminate / Reboot** instances via CLI or Web UI
+- **Multi-profile** — manage multiple OCI tenancies from one config file
 - **Flex shapes** — configure OCPUs and Memory for `VM.Standard.A1.Flex`, `E4.Flex`, etc.
 - **Presets** — save reusable instance configurations (shape, OS, resources) in config
 - **Auto-selection** — automatically picks availability domain, image, and shape when not specified
 - **Task queue** — Web UI queues create requests with automatic retry; tasks can be stopped
-- **Cron mode** — headless `cron` subcommand for scheduling via system cron / Windows Task Scheduler
-- **Web UI** with admin key authentication and profile selector
-- **Internationalization** — Web UI supports English and Chinese (EN/ZH)
-- **Cross-platform** — builds for Linux (x64/ARM64), macOS (x64/ARM64), and Windows (x64)
+- **Cron mode** — headless `cron` subcommand for system schedulers
+- **Web-only mode** — start the Web UI without any OCI profiles configured
+- **Web UI** with admin key authentication, profile selector, English/Chinese support
+- **Cross-platform** — Linux (x64/ARM64), macOS (x64/ARM64), Windows (x64)
 
 ---
 
-## Quick Start
+## Installation
 
-### 1. Prerequisites
+### Linux One-Click Install
 
-- [Rust toolchain](https://rustup.rs/) (cargo + rustc)
-- An OCI API signing key (`.pem` file) — [How to generate](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm)
-- Network access to OCI API endpoints
+```bash
+curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh | bash
+```
 
-### 2. Build
+This downloads the latest binary and sets up a **systemd** service on port `9927`.
+
+After installation:
+
+1. Edit your config file (the script tells you where: `~/.oci-manager/config` or `/etc/oci-manager/config`)
+2. Place your OCI API `.pem` key in the same directory
+3. Start the service:
+   - **Non-root**: `systemctl --user enable --now oci-manager`
+   - **Root**: `sudo systemctl enable --now oci-manager`
+4. Open `http://your-server-ip:9927` in your browser
+
+### Uninstall
+
+```bash
+curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/uninstall.sh | bash
+```
+
+### Build from Source
+
+Requires [Rust toolchain](https://rustup.rs/).
 
 ```bash
 cargo build --release
+# Binary: target/release/oci-manager (or oci-manager.exe on Windows)
 ```
-
-The binary will be at `target/release/oci-manager` (or `oci-manager.exe` on Windows).
-
-### 3. Configure
-
-Copy the example config and fill in your credentials:
-
-```bash
-# Linux / macOS
-cp config.example ~/.oci/config
-
-# Windows (PowerShell)
-Copy-Item config.example $env:USERPROFILE\.oci\config
-```
-
-Edit the file and replace the placeholder values with your real OCI credentials.
-
-> ⚠️ **NEVER commit your real `config` file or `.pem` keys to git!**
-> The `config` file is in `.gitignore` — only `config.example` is tracked.
 
 ---
 
-## Configuration Reference
+## Configuration
 
-The config file uses INI format (same as `~/.oci/config`).
+The config file uses INI format. Location priority:
 
-### Config File Location (priority order)
+| Priority | Path |
+|----------|------|
+| 1 | `--config <path>` (CLI flag) |
+| 2 | `./config` (current directory) |
+| 3 | `~/.oci/config` (home directory) |
 
-| Priority | Source |
-|----------|--------|
-| 1 | `--config <path>` CLI flag |
-| 2 | `./config` (current working directory) |
-| 3 | `~/.oci/config` (user home) |
-
-### Profile Fields
-
-```ini
-[DEFAULT]
-# ── Required ──────────────────────────────────
-user=ocid1.user.oc1..aaaaaaaaexample      # Your user OCID
-fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33  # API key fingerprint
-tenancy=ocid1.tenancy.oc1..aaaaaaaaexample # Tenancy OCID
-region=us-phoenix-1                         # OCI region identifier
-key_file=/path/to/oci_api_key.pem          # Path to private key
-
-# ── Optional defaults ─────────────────────────
-compartment=ocid1.compartment.oc1..example # Default compartment
-subnet=ocid1.subnet.oc1..example           # Default subnet
-shape=VM.Standard.E4.Flex                  # Default shape
-availability_domain=Uocm:PHX-AD-1          # Default AD
-ssh_public_key=/path/to/id_rsa.pub         # SSH public key (path or inline)
-display_name_prefix=auto                   # Prefix for auto-generated names
-boot_volume_size_gbs=50                    # Boot volume size (GB)
-ocpus=1                                    # Default OCPUs (Flex shapes)
-memory_in_gbs=6                            # Default memory GB (Flex shapes)
-
-# ── Web UI (can also go in [global:web]) ──────
-enable_admin=true                          # Enable web UI
-admin_key=your-strong-random-key           # Authentication key
-port=9927                                  # Web UI port
+```bash
+cp config.example ~/.oci/config   # then edit with your real values
 ```
 
-### Global Web Settings (`[global:web]`)
+> ⚠️ **NEVER commit your real `config` file or `.pem` keys to git!**
 
-You can separate web server settings from OCI profile credentials using the `[global:web]` section. Properties here are merged into all profiles and used for `serve` command configuration:
+### Full Example
 
 ```ini
-# These apply globally — no OCI credentials needed here
+# ── Web UI Settings ────────────────────────
 [global:web]
 enable_admin=true
-admin_key=your-strong-random-key
+admin_key=change-me-to-a-strong-random-key
 port=9927
 ssh_public_key=ssh-ed25519 AAAA...
 
-# OCI credentials go in profiles
+# ── OCI Profile ────────────────────────────
 [DEFAULT]
-user=ocid1.user.oc1..example
-fingerprint=aa:bb:cc:...
-tenancy=ocid1.tenancy.oc1..example
+user=ocid1.user.oc1..aaaaaaaaexample
+fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33
+tenancy=ocid1.tenancy.oc1..aaaaaaaaexample
 region=us-phoenix-1
-key_file=~/.oci/key.pem
-```
+key_file=/path/to/oci_api_key.pem
+compartment=ocid1.compartment.oc1..example
+subnet=ocid1.subnet.oc1..example
+shape=VM.Standard.E4.Flex
+availability_domain=Uocm:PHX-AD-1
 
-You can also place global settings at the **top level** of the config file (before any section header) — they behave the same as `[global:web]`.
-
-### Web-Only Mode
-
-The `serve` command can start even without any OCI profiles configured. This is useful for initial setup or when you only need the web UI:
-
-```ini
-# Minimal config — web UI only, no OCI profiles
-[global:web]
-enable_admin=true
-admin_key=your-strong-random-key
-port=9927
-```
-
-```bash
-oci-manager serve
-# Web UI will start; OCI operations will fail until a profile is added
-```
-
-### Multiple Profiles
-
-Add additional `[SECTION]` blocks for different tenancies:
-
-```ini
-[SECONDARY]
-user=ocid1.user.oc1..example2
-fingerprint=bb:cc:dd:ee:ff:00:11:22:33:44
-tenancy=ocid1.tenancy.oc1..example2
-region=eu-frankfurt-1
-key_file=/path/to/key2.pem
-```
-
-Switch profiles with `--profile SECONDARY` (CLI) or the dropdown in the Web UI.
-
-### Presets
-
-Define reusable instance configurations with `[preset:NAME]`:
-
-```ini
+# ── Presets ────────────────────────────────
 [preset:ARM-1cpu-6gb-Ubuntu]
 shape=VM.Standard.A1.Flex
 ocpus=1
@@ -161,7 +101,57 @@ image_version=22.04
 display_name_prefix=arm-ubuntu
 ```
 
-All preset fields are optional and override profile defaults when selected.
+### `[global:web]` — Web UI Settings
+
+Web server settings go here. This section is **not** an OCI profile — no credentials needed.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `enable_admin` | ✅ | Set `true` to enable the web UI |
+| `admin_key` | ✅ | Authentication key for login |
+| `port` | | Web UI port (default: `8080`) |
+| `ssh_public_key` | | Global default SSH key for all profiles |
+
+> **Tip:** These settings can also be placed at the **top level** of the config (before any `[section]`).
+
+**Web-only mode:** If you only include `[global:web]` without any OCI profile, the web server will still start. OCI operations will fail until a profile is added.
+
+### `[DEFAULT]` / `[NAME]` — OCI Profiles
+
+OCI credentials. `[DEFAULT]` is used when no `--profile` is specified.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `user` | ✅ | User OCID |
+| `fingerprint` | ✅ | API key fingerprint |
+| `tenancy` | ✅ | Tenancy OCID |
+| `region` | ✅ | OCI region (e.g. `us-phoenix-1`) |
+| `key_file` | ✅ | Path to private key `.pem` |
+| `compartment` | | Default compartment OCID |
+| `subnet` | | Default subnet OCID |
+| `shape` | | Default shape |
+| `availability_domain` | | Default AD |
+| `ssh_public_key` | | SSH public key (path or inline) |
+| `display_name_prefix` | | Prefix for auto-generated names |
+| `boot_volume_size_gbs` | | Boot volume size in GB |
+| `ocpus` | | Default OCPUs (Flex shapes) |
+| `memory_in_gbs` | | Default memory in GB (Flex shapes) |
+
+Add more profiles with named sections (e.g. `[SECONDARY]`). Switch with `--profile SECONDARY` or the Web UI dropdown.
+
+### `[preset:NAME]` — Reusable Configurations
+
+Define reusable instance configurations. All fields are optional and override profile defaults when selected.
+
+```ini
+[preset:ARM-4cpu-24gb-OracleLinux]
+shape=VM.Standard.A1.Flex
+ocpus=4
+memory_in_gbs=24
+image_os=Oracle Linux
+image_version=8
+display_name_prefix=arm-ol
+```
 
 ---
 
@@ -187,10 +177,8 @@ oci-manager instance create \
   --shape VM.Standard.A1.Flex --ocpus 4 --memory-gbs 24 \
   --retry --retry-seconds 180
 
-# Terminate
+# Terminate / Reboot
 oci-manager instance terminate --instance <ocid>
-
-# Reboot (soft or hard)
 oci-manager instance reboot --instance <ocid>
 oci-manager instance reboot --instance <ocid> --hard
 
@@ -201,61 +189,28 @@ oci-manager availability --compartment <ocid>
 ### Web UI
 
 ```bash
-# Start on localhost (default)
-oci-manager serve
-
-# Start on custom port
-oci-manager serve --port 9090
-
-# Allow remote access (use with caution — add TLS via reverse proxy)
-oci-manager serve --host 0.0.0.0 --port 8080 --allow-remote
+oci-manager serve                                        # localhost:8080
+oci-manager serve --port 9090                            # custom port
+oci-manager serve --host 0.0.0.0 --port 8080 --allow-remote  # remote access
 ```
 
-Open `http://127.0.0.1:8080`, enter your `admin_key`, and use the UI to:
+Open the URL in your browser, enter your `admin_key`, and you can:
 - Select profiles and presets
 - Create instances with full form validation
-- Queue tasks with automatic retry (and **Stop** them)
+- Queue tasks with automatic retry (and stop them)
 - View, reboot, and terminate running instances
 
----
+### Cron Mode
 
-## Linux One-Click Installation (Ubuntu/CentOS/ARM/x86)
-
-Run this command on your Linux server to automatically download the latest binary and setup the **systemd** service on port `9927`:
+Runs a single create attempt (or retry loop) and exits. Perfect for system schedulers:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh | bash
-```
-
-### After Installation:
-The script will tell you where to find your config files (either `~/.oci-manager/` for users or `/etc/oci-manager/` for root).
-
-1. **Configure**: Edit `config` (fill in your OCIDs).
-2. **Key**: Place your OCI API `.pem` key in the same directory.
-3. **Start**:
-    - **Non-Root**: `systemctl --user enable --now oci-manager`
-    - **Root**: `sudo systemctl enable --now oci-manager`
-4. **Access**: Open `http://your-server-ip:9927` in your browser.
-
-## Uninstallation
-
-To stop the service and remove all files (including configs):
-
-```bash
-curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/uninstall.sh | bash
-```
-
-
-### Cron Mode (Background / Scheduled)
-
-The `cron` subcommand runs a single create attempt (or retry loop) and exits. Perfect for system schedulers:
-
-```bash
-# Single attempt using a preset
+# Using a preset
 oci-manager cron --preset ARM-1cpu-6gb-Ubuntu
 
-# With retry (keeps trying every 3 minutes, max 10 attempts)
-oci-manager cron --preset ARM-4cpu-24gb-OracleLinux --retry --retry-seconds 180 --retry-max 10
+# With retry (max 10 attempts, 3 min interval)
+oci-manager cron --preset ARM-4cpu-24gb-OracleLinux \
+  --retry --retry-seconds 180 --retry-max 10
 
 # Override preset values
 oci-manager cron --preset ARM-1cpu-6gb-Ubuntu --ocpus 2 --memory-gbs 12
@@ -267,42 +222,36 @@ oci-manager cron \
   --retry
 ```
 
-**Linux cron example** (try every 5 minutes):
+**Linux cron** (try every 5 minutes):
 ```cron
-*/5 * * * * /usr/local/bin/oci-manager --config /home/user/.oci/config cron --preset ARM-1cpu-6gb-Ubuntu >> /var/log/oci-cron.log 2>&1
+*/5 * * * * /usr/local/bin/oci-manager cron --preset ARM-1cpu-6gb-Ubuntu >> /var/log/oci-cron.log 2>&1
 ```
 
-**Windows Task Scheduler**: Create a task that runs `oci-manager.exe cron --preset ARM-1cpu-6gb-Ubuntu --retry` on your desired schedule.
+**Windows Task Scheduler**: Run `oci-manager.exe cron --preset ARM-1cpu-6gb-Ubuntu --retry` on your desired schedule.
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `OCI_PROFILE` | Default profile name (instead of `--profile`) |
-| `OCI_ADMIN_KEY` | Admin key for web UI (instead of config/`--admin-key`) |
+| `OCI_ADMIN_KEY` | Admin key for web UI (fallback if not in config) |
 | `RUST_LOG` | Log level (`info`, `debug`, `trace`) |
 
 ---
 
 ## Security
 
-### For Public Repositories
-
-This project is designed to be safe for public GitHub repos:
-
 | Item | Protection |
 |------|------------|
 | OCI credentials | `.gitignore` blocks `config`, `*.pem`, `*.key` |
-| Admin key | Never hardcoded; set via config file or `OCI_ADMIN_KEY` env var |
+| Admin key | Set via config or `OCI_ADMIN_KEY` env var, never hardcoded |
 | Web UI binding | Defaults to `127.0.0.1`; requires `--allow-remote` for non-loopback |
-| Authentication | All API endpoints require `admin_key` via header, bearer token, or cookie |
+| Authentication | All API endpoints require `admin_key` (header, bearer, or cookie) |
 | SSH keys (Web UI) | Inline-only validation prevents file path traversal |
 
-### Recommendations
-
+**Recommendations:**
 - Use a **strong, random `admin_key`** (32+ characters)
 - For remote access, place behind a **reverse proxy with TLS** (Caddy, nginx)
-- Set `RUST_LOG=info` in production to avoid leaking sensitive data in debug logs
+- Set `RUST_LOG=info` in production
 - Rotate API keys periodically
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting.
@@ -311,17 +260,10 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 ## Development
 
-### Run Tests
-
 ```bash
-cargo test
-```
-
-### Format & Lint
-
-```bash
-cargo fmt
-cargo clippy --all-targets -- -D warnings
+cargo test                                    # Run tests
+cargo fmt                                     # Format code
+cargo clippy --all-targets -- -D warnings     # Lint
 ```
 
 ### Project Structure
@@ -339,9 +281,7 @@ oci-manager/
 ├── static/
 │   ├── index.html   # Admin dashboard (SPA)
 │   └── login.html   # Login page
-├── config.example   # Safe example config (tracked in git)
-├── .gitignore       # Blocks credentials, build artifacts, logs
-├── SECURITY.md      # Security policy & vulnerability reporting
+├── config.example   # Example config (tracked in git)
 ├── Cargo.toml       # Rust dependencies
 └── .github/
     └── workflows/
@@ -352,7 +292,7 @@ oci-manager/
 
 ## CI / CD
 
-The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and PR:
+GitHub Actions runs on every push and PR:
 
 | Job | Description |
 |-----|-------------|
@@ -369,7 +309,7 @@ The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and 
 | `x86_64-unknown-linux-musl` | Linux | x64 (Static) |
 | `aarch64-unknown-linux-musl` | Linux | ARM64 (Static) |
 | `x86_64-apple-darwin` | macOS | x64 |
-| `aarch64-apple-darwin` | macOS | ARM64 (Apple Silicon) |
+| `aarch64-apple-darwin` | macOS | ARM64 |
 | `x86_64-pc-windows-msvc` | Windows | x64 |
 
 ### Creating a Release
@@ -378,8 +318,6 @@ The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and 
 git tag v0.2.0
 git push origin v0.2.0
 ```
-
-GitHub Actions will build all targets and create a release with downloadable binaries.
 
 ---
 
