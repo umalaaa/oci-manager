@@ -183,13 +183,17 @@ Open `http://127.0.0.1:8080`, enter your `admin_key`, and use the UI to:
 Run this command on your Linux server to automatically download the latest binary and setup the **systemd** service on port `9927`:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh | sudo bash
+curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh | bash
 ```
 
 ### After Installation:
-1. **Configure**: `sudo nano /etc/oci-manager/config` (fill in your OCIDs).
-2. **Key**: Place your OCI API `.pem` key at `/etc/oci-manager/key.pem`.
-3. **Start**: `sudo systemctl enable --now oci-manager`
+The script will tell you where to find your config files (either `~/.oci-manager/` for users or `/etc/oci-manager/` for root).
+
+1. **Configure**: Edit `config` (fill in your OCIDs).
+2. **Key**: Place your OCI API `.pem` key in the same directory.
+3. **Start**:
+    - **Non-Root**: `systemctl --user enable --now oci-manager`
+    - **Root**: `sudo systemctl enable --now oci-manager`
 4. **Access**: Open `http://your-server-ip:9927` in your browser.
 
 ## Uninstallation
@@ -321,8 +325,8 @@ The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and 
 
 | Target | OS | Arch |
 |--------|----|------|
-| `x86_64-unknown-linux-gnu` | Linux | x64 |
-| `aarch64-unknown-linux-gnu` | Linux | ARM64 |
+| `x86_64-unknown-linux-musl` | Linux | x64 (Static) |
+| `aarch64-unknown-linux-musl` | Linux | ARM64 (Static) |
 | `x86_64-apple-darwin` | macOS | x64 |
 | `aarch64-apple-darwin` | macOS | ARM64 (Apple Silicon) |
 | `x86_64-pc-windows-msvc` | Windows | x64 |

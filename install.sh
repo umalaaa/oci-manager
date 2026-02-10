@@ -35,11 +35,11 @@ else
 fi
 
 if [ "$ARCH" == "x86_64" ]; then
-    TARGET="x86_64-unknown-linux-gnu"
-    FILENAME="oci-manager-x86_64-unknown-linux-gnu.tar.gz"
+    TARGET="x86_64-unknown-linux-musl"
+    FILENAME="oci-manager-x86_64-unknown-linux-musl.tar.gz"
 elif [ "$ARCH" == "aarch64" ]; then
-    TARGET="aarch64-unknown-linux-gnu"
-    FILENAME="oci-manager-aarch64-unknown-linux-gnu.tar.gz"
+    TARGET="aarch64-unknown-linux-musl"
+    FILENAME="oci-manager-aarch64-unknown-linux-musl.tar.gz"
 else
     echo "Unsupported architecture: $ARCH"
     exit 1
