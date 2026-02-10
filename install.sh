@@ -28,7 +28,22 @@ else
     exit 1
 fi
 
-# 2. Download Binary if not present
+# 2. Version Check
+echo "Checking for updates..."
+LATEST_VERSION=$(curl -sSf https://raw.githubusercontent.com/$REPO/main/VERSION | tr -d '[:space:]')
+INSTALLED_VERSION=""
+if [ -f "$CONF_DIR/version" ]; then
+    INSTALLED_VERSION=$(cat "$CONF_DIR/version" | tr -d '[:space:]')
+fi
+
+if [ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]; then
+    echo "OCI Manager is already up to date (v$INSTALLED_VERSION)."
+    exit 0
+fi
+
+echo "Installing version v$LATEST_VERSION (current: ${INSTALLED_VERSION:-none})..."
+
+# 3. Download Binary
 if [ ! -f "./$BINARY_NAME" ]; then
     echo "Downloading latest release for $ARCH..."
     LATEST_URL=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep "browser_download_url" | grep "$TARGET" | cut -d '"' -f 4)
@@ -86,6 +101,7 @@ WantedBy=multi-user.target
 EOF"
 
 # 6. Finalize
+echo "$LATEST_VERSION" | sudo tee $CONF_DIR/version > /dev/null
 sudo systemctl daemon-reload
 echo ""
 echo "Installation complete! / 安装完成！"
