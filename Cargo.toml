@@ -11,7 +11,7 @@ clap = { version = "4", features = ["derive", "env"] }
 configparser = "1"
 dirs = "5"
 pkcs8 = { version = "0.10", features = ["pem"] }
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 rsa = { version = "0.9", features = ["pem"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
