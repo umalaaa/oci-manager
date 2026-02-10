@@ -77,19 +77,34 @@ cp config.example ~/.oci/config   # then edit with your real values
 enable_admin=true
 admin_key=change-me-to-a-strong-random-key
 port=9927
-ssh_public_key=ssh-ed25519 AAAA...
+# ssh_public_key=ssh-ed25519 AAAA...         # (optional) global default SSH key
 
-# ── OCI Profile ────────────────────────────
+# ── Default OCI Profile (required fields) ──
 [DEFAULT]
 user=ocid1.user.oc1..aaaaaaaaexample
 fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33
 tenancy=ocid1.tenancy.oc1..aaaaaaaaexample
 region=us-phoenix-1
 key_file=/path/to/oci_api_key.pem
-compartment=ocid1.compartment.oc1..example
-subnet=ocid1.subnet.oc1..example
-shape=VM.Standard.E4.Flex
-availability_domain=Uocm:PHX-AD-1
+
+# ── Optional defaults (uncomment as needed) ─
+# compartment=ocid1.compartment.oc1..example
+# subnet=ocid1.subnet.oc1..example
+# shape=VM.Standard.E4.Flex
+# availability_domain=Uocm:PHX-AD-1
+# ssh_public_key=/path/to/id_rsa.pub
+# display_name_prefix=auto
+# boot_volume_size_gbs=50
+# ocpus=1
+# memory_in_gbs=6
+
+# ── Additional Profile (you can add as many as needed) ──
+# [SECONDARY]
+# user=ocid1.user.oc1..example2
+# fingerprint=bb:cc:dd:ee:ff:00:11:22:33:44
+# tenancy=ocid1.tenancy.oc1..example2
+# region=eu-frankfurt-1
+# key_file=/path/to/key2.pem
 
 # ── Presets ────────────────────────────────
 [preset:ARM-1cpu-6gb-Ubuntu]
