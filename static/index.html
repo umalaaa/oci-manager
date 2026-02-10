@@ -257,6 +257,7 @@
       <h2 data-i18n="tasks_title">Tasks</h2>
       <div class="actions" style="margin-bottom: 12px;">
         <button class="secondary" onclick="loadTasks()" data-i18n="refresh_btn">Refresh</button>
+        <button class="secondary" onclick="clearFinishedTasks()" data-i18n="clear_finished_btn">Clear Finished</button>
       </div>
       <table>
         <thead>
@@ -366,6 +367,8 @@
         queueing: "Queueing...",
         queued: "Task Queued: ",
         confirm_stop: "Stop task?",
+        clear_finished_btn: "Clear Finished",
+        delete_btn: "Delete",
         select_shape_first: "Select shape first",
         error_prefix: "Error: ",
         ad_list_title: "Availability Domains",
@@ -426,6 +429,8 @@
         queueing: "提交中...",
         queued: "任务已提交: ",
         confirm_stop: "确定停止任务吗？",
+        clear_finished_btn: "清理已完成",
+        delete_btn: "删除",
         select_shape_first: "请先选择配置",
         error_prefix: "错误: ",
         ad_list_title: "可用区列表",
@@ -699,7 +704,9 @@
         // Actions column
         const actionsCell = document.createElement("td");
         if (isActive && !task.cancelled) {
-          actionsCell.appendChild(actionButton(t("stop_btn"), "", () => cancelTask(task.id)));
+          actionsCell.appendChild(actionButton(t("stop_btn"), "secondary", () => delete_task(task.id)));
+        } else {
+          actionsCell.appendChild(actionButton(t("delete_btn"), "secondary", () => delete_task(task.id)));
         }
         row.appendChild(actionsCell);
 
@@ -707,8 +714,17 @@
       });
     }
 
-    async function cancelTask(taskId) {
+    async function delete_task(taskId) {
       const response = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+      if (!response.ok) {
+        alert(await response.text());
+        return;
+      }
+      loadTasks();
+    }
+
+    async function clearFinishedTasks() {
+      const response = await fetch("/api/tasks", { method: "DELETE" });
       if (!response.ok) {
         alert(await response.text());
         return;

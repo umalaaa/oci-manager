@@ -125,8 +125,8 @@ pub async fn serve(
         .route("/api/subnets", get(list_subnets))
         .route("/api/compartments", get(list_compartments))
         .route("/api/availability", get(availability))
-        .route("/api/tasks", get(list_tasks).post(queue_instance))
-        .route("/api/tasks/:id", delete(cancel_task))
+        .route("/api/tasks", get(list_tasks).post(queue_instance).delete(clear_tasks))
+        .route("/api/tasks/:id", delete(delete_task))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -624,19 +624,31 @@ async fn queue_instance(
     Json(serde_json::json!({ "taskId": id }))
 }
 
-async fn cancel_task(
+async fn delete_task(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let tasks = state.tasks.lock().unwrap();
-    let task = tasks.iter().find(|t| t.id == id);
-    match task {
-        Some(t) => {
-            t.cancelled.store(true, Ordering::Relaxed);
-            Ok(StatusCode::NO_CONTENT)
-        }
-        None => Err((StatusCode::NOT_FOUND, format!("Task '{}' not found", id))),
+    let mut tasks = state.tasks.lock().unwrap();
+    if let Some(pos) = tasks.iter().position(|t| t.id == id) {
+        let task = &tasks[pos];
+        task.cancelled.store(true, Ordering::Relaxed);
+        tasks.remove(pos);
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err((StatusCode::NOT_FOUND, format!("Task '{}' not found", id)))
     }
+}
+
+async fn clear_tasks(State(state): State<AppState>) -> impl IntoResponse {
+    let mut tasks = state.tasks.lock().unwrap();
+    tasks.retain(|t| {
+        let active = matches!(
+            t.status,
+            TaskStatus::Pending | TaskStatus::Running | TaskStatus::Retrying(_)
+        );
+        active && !t.cancelled.load(Ordering::Relaxed)
+    });
+    StatusCode::NO_CONTENT
 }
 
 fn update_task_status(
