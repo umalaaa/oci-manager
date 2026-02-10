@@ -23,10 +23,7 @@ async fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
     let config = OciConfig::load(cli.config)?;
-    let profile_name = cli
-        .profile
-        .clone()
-        .unwrap_or_else(|| "DEFAULT".to_string());
+    let profile_name = cli.profile.clone().unwrap_or_else(|| "DEFAULT".to_string());
     let profile = config.profile(Some(&profile_name))?;
 
     match cli.command {
@@ -64,14 +61,7 @@ async fn main() -> Result<()> {
             } else {
                 profile.port.unwrap_or(args.port)
             };
-            web::serve(
-                config,
-                profile_name,
-                admin_key,
-                args.host,
-                port,
-            )
-            .await?;
+            web::serve(config, profile_name, admin_key, args.host, port).await?;
         }
         Command::Cron(args) => {
             let client = OciClient::new(profile.clone())?;
@@ -100,7 +90,10 @@ async fn handle_instance(
                 for instance in instances {
                     println!(
                         "{}\t{}\t{}\t{}",
-                        instance.id, instance.lifecycle_state, instance.display_name, instance.shape
+                        instance.id,
+                        instance.lifecycle_state,
+                        instance.display_name,
+                        instance.shape
                     );
                 }
             }
@@ -135,7 +128,10 @@ async fn handle_instance(
                 );
                 match client.create_instance(resolved.payload).await {
                     Ok(instance) => {
-                        println!("Instance created: {} ({})", instance.display_name, instance.id);
+                        println!(
+                            "Instance created: {} ({})",
+                            instance.display_name, instance.id
+                        );
                         break;
                     }
                     Err(err) => {
@@ -214,7 +210,10 @@ async fn handle_cron(
 ) -> Result<()> {
     // Merge preset values if --preset is given
     let preset = if let Some(preset_name) = &args.preset {
-        config.presets.iter().find(|p| p.name.eq_ignore_ascii_case(preset_name))
+        config
+            .presets
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(preset_name))
     } else {
         None
     };
@@ -224,36 +223,54 @@ async fn handle_cron(
         attempt += 1;
         let input = CreateInput {
             profile: None,
-            compartment: args.compartment.clone()
+            compartment: args
+                .compartment
+                .clone()
                 .or_else(|| preset.and_then(|p| p.compartment.clone())),
-            subnet: args.subnet.clone()
+            subnet: args
+                .subnet
+                .clone()
                 .or_else(|| preset.and_then(|p| p.subnet.clone())),
-            shape: args.shape.clone()
+            shape: args
+                .shape
+                .clone()
                 .or_else(|| preset.and_then(|p| p.shape.clone())),
-            ocpus: args.ocpus
-                .or_else(|| preset.and_then(|p| p.ocpus)),
-            memory_in_gbs: args.memory_in_gbs
+            ocpus: args.ocpus.or_else(|| preset.and_then(|p| p.ocpus)),
+            memory_in_gbs: args
+                .memory_in_gbs
                 .or_else(|| preset.and_then(|p| p.memory_in_gbs)),
-            boot_volume_size_gbs: args.boot_volume_size_gbs
+            boot_volume_size_gbs: args
+                .boot_volume_size_gbs
                 .or_else(|| preset.and_then(|p| p.boot_volume_size_gbs)),
-            availability_domain: args.availability_domain.clone()
+            availability_domain: args
+                .availability_domain
+                .clone()
                 .or_else(|| preset.and_then(|p| p.availability_domain.clone())),
-            image: args.image.clone()
+            image: args
+                .image
+                .clone()
                 .or_else(|| preset.and_then(|p| p.image.clone())),
-            image_os: args.image_os.clone()
+            image_os: args
+                .image_os
+                .clone()
                 .or_else(|| preset.and_then(|p| p.image_os.clone())),
-            image_version: args.image_version.clone()
+            image_version: args
+                .image_version
+                .clone()
                 .or_else(|| preset.and_then(|p| p.image_version.clone())),
-            display_name: args.display_name.clone()
-                .or_else(|| preset.and_then(|p| {
+            display_name: args.display_name.clone().or_else(|| {
+                preset.and_then(|p| {
                     p.display_name_prefix.as_ref().map(|prefix| {
                         let ts = time::OffsetDateTime::now_utc()
                             .format(&time::format_description::well_known::Rfc3339)
                             .unwrap_or_else(|_| "now".to_string());
                         format!("{}-{}", prefix, ts.replace(':', ""))
                     })
-                })),
-            ssh_key: args.ssh_key.clone()
+                })
+            }),
+            ssh_key: args
+                .ssh_key
+                .clone()
                 .or_else(|| preset.and_then(|p| p.ssh_public_key.clone())),
         };
 
@@ -265,7 +282,10 @@ async fn handle_cron(
 
         match client.create_instance(resolved.payload).await {
             Ok(instance) => {
-                println!("[cron] Instance created: {} ({})", instance.display_name, instance.id);
+                println!(
+                    "[cron] Instance created: {} ({})",
+                    instance.display_name, instance.id
+                );
                 return Ok(());
             }
             Err(err) => {

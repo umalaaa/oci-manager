@@ -97,15 +97,11 @@ pub async fn resolve_create_payload(
     });
 
     let ssh_key = resolve_ssh_key(
-        input
-            .ssh_key
-            .or_else(|| defaults.ssh_public_key.clone()),
+        input.ssh_key.or_else(|| defaults.ssh_public_key.clone()),
         allow_ssh_key_file,
     )?;
 
-    let boot_volume_size_gbs = input
-        .boot_volume_size_gbs
-        .or(defaults.boot_volume_size_gbs);
+    let boot_volume_size_gbs = input.boot_volume_size_gbs.or(defaults.boot_volume_size_gbs);
     if let Some(size) = boot_volume_size_gbs {
         if size == 0 {
             bail!("boot volume size must be greater than 0");
@@ -122,18 +118,28 @@ pub async fn resolve_create_payload(
     if is_flex {
         match (ocpus, memory_in_gbs) {
             (None, None) => {
-                tracing::info!("Flex shape with no ocpus/memory specified; defaulting to 1 OCPU, 6 GB");
+                tracing::info!(
+                    "Flex shape with no ocpus/memory specified; defaulting to 1 OCPU, 6 GB"
+                );
                 ocpus = Some(1.0);
                 memory_in_gbs = Some(6.0);
             }
             (Some(o), None) => {
                 let mem = o * 6.0;
-                tracing::info!("Flex shape: ocpus={} set but no memory; defaulting memory to {} GB", o, mem);
+                tracing::info!(
+                    "Flex shape: ocpus={} set but no memory; defaulting memory to {} GB",
+                    o,
+                    mem
+                );
                 memory_in_gbs = Some(mem);
             }
             (None, Some(m)) => {
                 let cpu = (m / 6.0).max(1.0);
-                tracing::info!("Flex shape: memory={} GB set but no ocpus; defaulting ocpus to {}", m, cpu);
+                tracing::info!(
+                    "Flex shape: memory={} GB set but no ocpus; defaulting ocpus to {}",
+                    m,
+                    cpu
+                );
                 ocpus = Some(cpu);
             }
             (Some(_), Some(_)) => { /* both set, nothing to do */ }
@@ -142,7 +148,8 @@ pub async fn resolve_create_payload(
         // Non-flex shape with partial flex config — just ignore both
         tracing::warn!(
             "Non-flex shape with partial ocpus/memory (ocpus={:?}, mem={:?}); ignoring both",
-            ocpus, memory_in_gbs
+            ocpus,
+            memory_in_gbs
         );
         ocpus = None;
         memory_in_gbs = None;
@@ -179,10 +186,7 @@ pub async fn resolve_create_payload(
 
     Ok(ResolvedCreate {
         shape: payload["shape"].as_str().unwrap().to_string(),
-        availability_domain: payload["availabilityDomain"]
-            .as_str()
-            .unwrap()
-            .to_string(),
+        availability_domain: payload["availabilityDomain"].as_str().unwrap().to_string(),
         payload,
     })
 }
@@ -192,13 +196,8 @@ async fn pick_shape(client: &OciClient, compartment: &str, ad: &str) -> Result<S
     if shapes.is_empty() {
         bail!("No shapes available in {}", ad);
     }
-    let preferred = shapes
-        .iter()
-        .find(|shape| shape.shape.starts_with("VM."));
-    Ok(preferred
-        .unwrap_or(&shapes[0])
-        .shape
-        .to_string())
+    let preferred = shapes.iter().find(|shape| shape.shape.starts_with("VM."));
+    Ok(preferred.unwrap_or(&shapes[0]).shape.to_string())
 }
 
 fn select_latest_image(images: Vec<ImageSummary>) -> Result<String> {
@@ -269,7 +268,10 @@ fn resolve_ssh_key(value: Option<String>, allow_file: bool) -> Result<Option<Str
 }
 
 fn expand_tilde(value: &str) -> String {
-    if let Some(stripped) = value.strip_prefix("~/").or_else(|| value.strip_prefix("~\\")) {
+    if let Some(stripped) = value
+        .strip_prefix("~/")
+        .or_else(|| value.strip_prefix("~\\"))
+    {
         if let Some(home) = dirs::home_dir() {
             return home.join(stripped).to_string_lossy().to_string();
         }
@@ -296,9 +298,7 @@ fn looks_like_ssh_key(value: &str) -> bool {
     if key_body.is_empty() {
         return false;
     }
-    key_type.starts_with("ssh-")
-        || key_type.starts_with("ecdsa-")
-        || key_type.starts_with("sk-")
+    key_type.starts_with("ssh-") || key_type.starts_with("ecdsa-") || key_type.starts_with("sk-")
 }
 
 fn dedupe_keys(keys: Vec<String>) -> Option<String> {
@@ -349,8 +349,8 @@ mod tests {
 
     #[test]
     fn resolve_ssh_key_inline_only_accepts_key() {
-        let result = resolve_ssh_key(Some("ssh-ed25519 AAAA comment".to_string()), false)
-            .expect("ssh");
+        let result =
+            resolve_ssh_key(Some("ssh-ed25519 AAAA comment".to_string()), false).expect("ssh");
         assert_eq!(result, Some("ssh-ed25519 AAAA comment".to_string()));
     }
 
@@ -399,5 +399,4 @@ mod tests {
     fn dedupe_keys_empty_returns_none() {
         assert_eq!(dedupe_keys(vec![]), None);
     }
-
 }

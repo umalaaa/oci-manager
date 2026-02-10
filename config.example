@@ -10,6 +10,12 @@
 #   3. ~/.oci/config            (fallback)
 # ─────────────────────────────────────────────────────────────────
 
+# ── Web UI authentication ───────────────────────────────────────
+# enable_admin=true
+# admin_key=change-me-to-a-strong-random-key
+# port=9927
+
+# ── Default Profile ──────────────────────────────────────────────
 [DEFAULT]
 # ── Required ────────────────────────────────────────────────────
 user=ocid1.user.oc1..aaaaaaaaexampleexampleexampleexampleexample
@@ -26,12 +32,6 @@ key_file=/path/to/your/oci_api_key.pem
 # ssh_public_key=/path/to/your/id_rsa.pub
 # display_name_prefix=auto
 # boot_volume_size_gbs=50
-
-# ── Web UI authentication ───────────────────────────────────────
-# enable_admin=true
-# admin_key=change-me-to-a-strong-random-key
-# port=9927
-
 
 # ─────────────────────────────────────────────────────────────────
 # Additional Profiles

@@ -3,7 +3,11 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "oci-manager", version, about = "OCI Compute manager (CLI + web UI)")]
+#[command(
+    name = "oci-manager",
+    version,
+    about = "OCI Compute manager (CLI + web UI)"
+)]
 pub struct Cli {
     #[arg(short, long, global = true, env = "OCI_PROFILE")]
     pub profile: Option<String>,

@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use anyhow::{bail, Result};
-use axum::extract::{Path, Query, State};
 use axum::body::Body;
+use axum::extract::{Path, Query, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
@@ -44,7 +44,10 @@ struct Task {
 }
 
 impl Serialize for Task {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
         let mut s = serializer.serialize_struct("Task", 10)?;
         s.serialize_field("id", &self.id)?;
@@ -123,7 +126,10 @@ pub async fn serve(
         .route("/api/availability", get(availability))
         .route("/api/tasks", get(list_tasks).post(queue_instance))
         .route("/api/tasks/:id", delete(cancel_task))
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .with_state(state);
 
     let address = format!("{}:{}", host, port);
@@ -132,8 +138,6 @@ pub async fn serve(
     axum::serve(listener, app).await?;
     Ok(())
 }
-
-
 
 // ... (other imports remain, but I need to make sure I don't duplicate or miss them if I replace a block)
 // I better replace functions carefully.
@@ -205,10 +209,7 @@ async fn auth_middleware(
 }
 
 impl AppState {
-    fn select_profile(
-        &self,
-        name: Option<&str>,
-    ) -> Result<&ProfileState, (StatusCode, String)> {
+    fn select_profile(&self, name: Option<&str>) -> Result<&ProfileState, (StatusCode, String)> {
         let key = name
             .map(|value| value.trim().to_uppercase())
             .filter(|value| !value.is_empty())
@@ -497,10 +498,24 @@ async fn queue_instance(
     State(state): State<AppState>,
     Json(input): Json<CreateInput>,
 ) -> impl IntoResponse {
-    let id = format!("task-{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_micros());
-    let target = input.profile.clone().unwrap_or(state.default_profile.clone());
+    let id = format!(
+        "task-{}",
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_micros()
+    );
+    let target = input
+        .profile
+        .clone()
+        .unwrap_or(state.default_profile.clone());
     let ad_info = input.availability_domain.as_deref().unwrap_or("auto");
-    let desc = format!("Create {} ({}, {})", input.display_name.clone().unwrap_or("instance".into()), target, ad_info);
+    let desc = format!(
+        "Create {} ({}, {})",
+        input.display_name.clone().unwrap_or("instance".into()),
+        target,
+        ad_info
+    );
     let cancelled = Arc::new(AtomicBool::new(false));
 
     let task = Task {
@@ -508,7 +523,10 @@ async fn queue_instance(
         target_profile: target,
         description: desc,
         status: TaskStatus::Pending,
-        created_at: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+        created_at: SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
         retry_count: 0,
         last_error: None,
         next_retry_at: None,
@@ -530,15 +548,36 @@ async fn queue_instance(
         loop {
             // Check cancellation before each attempt
             if cancelled.load(Ordering::Relaxed) {
-                update_task_status(&state_clone, &task_id, TaskStatus::Cancelled, attempts, None, None);
+                update_task_status(
+                    &state_clone,
+                    &task_id,
+                    TaskStatus::Cancelled,
+                    attempts,
+                    None,
+                    None,
+                );
                 break;
             }
             attempts += 1;
-            update_task_status(&state_clone, &task_id, TaskStatus::Running, attempts, None, None);
+            update_task_status(
+                &state_clone,
+                &task_id,
+                TaskStatus::Running,
+                attempts,
+                None,
+                None,
+            );
 
             match execute_creation(&state_clone, input_clone.clone()).await {
                 Ok(inst) => {
-                    update_task_status(&state_clone, &task_id, TaskStatus::Success(format!("Created: {}", inst.display_name)), attempts, None, None);
+                    update_task_status(
+                        &state_clone,
+                        &task_id,
+                        TaskStatus::Success(format!("Created: {}", inst.display_name)),
+                        attempts,
+                        None,
+                        None,
+                    );
                     break;
                 }
                 Err(e) => {
@@ -548,17 +587,30 @@ async fn queue_instance(
                     } else if err_msg.contains("LimitExceeded") {
                         err_msg = "Limit Exceeded".to_string();
                     }
-                    let now_secs = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let now_secs = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
                     let next_at = now_secs + retry_interval;
                     update_task_status(
-                        &state_clone, &task_id,
+                        &state_clone,
+                        &task_id,
                         TaskStatus::Retrying(err_msg.clone()),
-                        attempts, Some(err_msg), Some(next_at),
+                        attempts,
+                        Some(err_msg),
+                        Some(next_at),
                     );
                     // Sleep in 1s increments so cancellation is responsive
                     for _ in 0..retry_interval {
                         if cancelled.load(Ordering::Relaxed) {
-                            update_task_status(&state_clone, &task_id, TaskStatus::Cancelled, attempts, None, None);
+                            update_task_status(
+                                &state_clone,
+                                &task_id,
+                                TaskStatus::Cancelled,
+                                attempts,
+                                None,
+                                None,
+                            );
                             return;
                         }
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -586,7 +638,14 @@ async fn cancel_task(
     }
 }
 
-fn update_task_status(state: &AppState, id: &str, status: TaskStatus, count: u32, last_error: Option<String>, next_retry_at: Option<u64>) {
+fn update_task_status(
+    state: &AppState,
+    id: &str,
+    status: TaskStatus,
+    count: u32,
+    last_error: Option<String>,
+    next_retry_at: Option<u64>,
+) {
     let mut tasks = state.tasks.lock().unwrap();
     if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
         task.status = status;
@@ -599,13 +658,21 @@ fn update_task_status(state: &AppState, id: &str, status: TaskStatus, count: u32
 }
 
 async fn execute_creation(state: &AppState, input: CreateInput) -> Result<InstanceSummary> {
-    let target_profile_name = input.profile.as_deref().unwrap_or(&state.default_profile).to_uppercase();
+    let target_profile_name = input
+        .profile
+        .as_deref()
+        .unwrap_or(&state.default_profile)
+        .to_uppercase();
     let Some(profile_state) = state.profiles.get(&target_profile_name) else {
         bail!("Profile '{}' not found", target_profile_name);
     };
 
     let payload =
-        resolve_create_payload(&profile_state.client, &profile_state.defaults, input, false).await?;
-    let instance = profile_state.client.create_instance(payload.payload).await?;
+        resolve_create_payload(&profile_state.client, &profile_state.defaults, input, false)
+            .await?;
+    let instance = profile_state
+        .client
+        .create_instance(payload.payload)
+        .await?;
     Ok(instance)
 }

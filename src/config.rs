@@ -89,7 +89,11 @@ impl OciConfig {
         }
 
         presets.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(Self { path, profiles, presets })
+        Ok(Self {
+            path,
+            profiles,
+            presets,
+        })
     }
 
     pub fn profile(&self, name: Option<&str>) -> Result<Profile> {
@@ -266,7 +270,10 @@ fn resolve_path(config_dir: &Path, value: &str) -> PathBuf {
 }
 
 fn expand_tilde(value: &str) -> String {
-    if let Some(stripped) = value.strip_prefix("~/").or_else(|| value.strip_prefix("~\\")) {
+    if let Some(stripped) = value
+        .strip_prefix("~/")
+        .or_else(|| value.strip_prefix("~\\"))
+    {
         if let Some(home) = dirs::home_dir() {
             return home.join(stripped).to_string_lossy().to_string();
         }
@@ -299,7 +306,10 @@ admin_key=secret
         let cfg = OciConfig::load(Some(config_path.clone())).expect("load");
         let profile = cfg.profile(Some("DEFAULT")).expect("profile");
         assert_eq!(profile.user, "ocid1.user.oc1..example");
-        assert_eq!(profile.defaults.compartment.as_deref(), Some("ocid1.compartment.oc1..example"));
+        assert_eq!(
+            profile.defaults.compartment.as_deref(),
+            Some("ocid1.compartment.oc1..example")
+        );
         assert!(profile.key_file.ends_with("oci.pem"));
         assert_eq!(profile.admin_key.as_deref(), Some("secret"));
         assert!(profile.enable_admin);

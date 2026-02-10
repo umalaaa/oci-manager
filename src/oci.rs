@@ -4,7 +4,9 @@ use anyhow::{bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use pkcs8::DecodePrivateKey;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, DATE, HOST};
+use reqwest::header::{
+    HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, DATE, HOST,
+};
 use reqwest::Method;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::Pkcs1v15Sign;
@@ -15,7 +17,9 @@ use time::OffsetDateTime;
 use url::Url;
 
 use crate::config::Profile;
-use crate::models::{AvailabilityDomain, CompartmentSummary, ImageSummary, InstanceSummary, Shape, SubnetSummary};
+use crate::models::{
+    AvailabilityDomain, CompartmentSummary, ImageSummary, InstanceSummary, Shape, SubnetSummary,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Service {
@@ -43,8 +47,14 @@ impl OciClient {
 
     pub async fn list_instances(&self, compartment_id: &str) -> Result<Vec<InstanceSummary>> {
         let query = vec![("compartmentId".to_string(), compartment_id.to_string())];
-        self.request_json(Service::Compute, Method::GET, "/20160918/instances", query, None)
-            .await
+        self.request_json(
+            Service::Compute,
+            Method::GET,
+            "/20160918/instances",
+            query,
+            None,
+        )
+        .await
     }
 
     pub async fn terminate_instance(&self, instance_id: &str) -> Result<()> {
@@ -87,8 +97,14 @@ impl OciClient {
                 availability_domain.to_string(),
             ),
         ];
-        self.request_json(Service::Compute, Method::GET, "/20160918/shapes", query, None)
-            .await
+        self.request_json(
+            Service::Compute,
+            Method::GET,
+            "/20160918/shapes",
+            query,
+            None,
+        )
+        .await
     }
 
     pub async fn list_images(
@@ -108,14 +124,26 @@ impl OciClient {
         if let Some(version) = os_version {
             query.push(("operatingSystemVersion".to_string(), version.to_string()));
         }
-        self.request_json(Service::Compute, Method::GET, "/20160918/images", query, None)
-            .await
+        self.request_json(
+            Service::Compute,
+            Method::GET,
+            "/20160918/images",
+            query,
+            None,
+        )
+        .await
     }
 
     pub async fn list_subnets(&self, compartment_id: &str) -> Result<Vec<SubnetSummary>> {
         let query = vec![("compartmentId".to_string(), compartment_id.to_string())];
-        self.request_json(Service::VirtualNetwork, Method::GET, "/20160918/subnets", query, None)
-            .await
+        self.request_json(
+            Service::VirtualNetwork,
+            Method::GET,
+            "/20160918/subnets",
+            query,
+            None,
+        )
+        .await
     }
 
     pub async fn list_compartments(&self) -> Result<Vec<CompartmentSummary>> {
@@ -124,8 +152,14 @@ impl OciClient {
             ("accessLevel".to_string(), "ACCESSIBLE".to_string()),
             ("compartmentIdInSubtree".to_string(), "true".to_string()),
         ];
-        self.request_json(Service::Identity, Method::GET, "/20160918/compartments", query, None)
-            .await
+        self.request_json(
+            Service::Identity,
+            Method::GET,
+            "/20160918/compartments",
+            query,
+            None,
+        )
+        .await
     }
 
     pub fn tenancy(&self) -> &str {
@@ -133,8 +167,14 @@ impl OciClient {
     }
 
     pub async fn create_instance(&self, payload: serde_json::Value) -> Result<InstanceSummary> {
-        self.request_json(Service::Compute, Method::POST, "/20160918/instances", vec![], Some(payload))
-            .await
+        self.request_json(
+            Service::Compute,
+            Method::POST,
+            "/20160918/instances",
+            vec![],
+            Some(payload),
+        )
+        .await
     }
 
     async fn request_json<T: serde::de::DeserializeOwned>(
@@ -145,8 +185,9 @@ impl OciClient {
         mut query: Vec<(String, String)>,
         body: Option<serde_json::Value>,
     ) -> Result<T> {
-        let (url, host, path_and_query) =
-            self.build_url(service, path, &mut query).context("build url")?;
+        let (url, host, path_and_query) = self
+            .build_url(service, path, &mut query)
+            .context("build url")?;
 
         let mut body_bytes = match body {
             Some(value) => Some(serde_json::to_vec(&value)?),
@@ -156,9 +197,9 @@ impl OciClient {
             body_bytes = Some(Vec::new());
         }
 
-        let headers = self
-            .signer
-            .signed_headers(&method, &host, &path_and_query, body_bytes.as_deref())?;
+        let headers =
+            self.signer
+                .signed_headers(&method, &host, &path_and_query, body_bytes.as_deref())?;
 
         let mut request = self.http.request(method, url);
         for (name, value) in headers.iter() {
@@ -180,8 +221,9 @@ impl OciClient {
         mut query: Vec<(String, String)>,
         body: Option<serde_json::Value>,
     ) -> Result<()> {
-        let (url, host, path_and_query) =
-            self.build_url(service, path, &mut query).context("build url")?;
+        let (url, host, path_and_query) = self
+            .build_url(service, path, &mut query)
+            .context("build url")?;
 
         let mut body_bytes = match body {
             Some(value) => Some(serde_json::to_vec(&value)?),
@@ -191,9 +233,9 @@ impl OciClient {
             body_bytes = Some(Vec::new());
         }
 
-        let headers = self
-            .signer
-            .signed_headers(&method, &host, &path_and_query, body_bytes.as_deref())?;
+        let headers =
+            self.signer
+                .signed_headers(&method, &host, &path_and_query, body_bytes.as_deref())?;
 
         let mut request = self.http.request(method, url);
         for (name, value) in headers.iter() {
@@ -231,8 +273,12 @@ impl OciClient {
         query: &mut Vec<(String, String)>,
     ) -> Result<(Url, String, String)> {
         let base = match service {
-            Service::Compute | Service::VirtualNetwork => format!("https://iaas.{}.oraclecloud.com", self.profile.region),
-            Service::Identity => format!("https://identity.{}.oraclecloud.com", self.profile.region),
+            Service::Compute | Service::VirtualNetwork => {
+                format!("https://iaas.{}.oraclecloud.com", self.profile.region)
+            }
+            Service::Identity => {
+                format!("https://identity.{}.oraclecloud.com", self.profile.region)
+            }
         };
         query.sort_by(|a, b| a.0.cmp(&b.0));
         let query_string = build_query_string(query);
@@ -258,19 +304,18 @@ struct Signer {
 impl Signer {
     fn new(profile: &Profile) -> Result<Self> {
         if !profile.key_file.exists() {
-            bail!(
-                "Private key file not found: {}",
-                profile.key_file.display()
-            );
+            bail!("Private key file not found: {}", profile.key_file.display());
         }
-        let raw_pem = fs::read_to_string(&profile.key_file).with_context(|| {
-            format!("Failed to read key file: {}", profile.key_file.display())
-        })?;
+        let raw_pem = fs::read_to_string(&profile.key_file)
+            .with_context(|| format!("Failed to read key file: {}", profile.key_file.display()))?;
         let pem = extract_pem_block(&raw_pem).unwrap_or(raw_pem);
         let key = RsaPrivateKey::from_pkcs8_pem(&pem)
             .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&pem))
             .context("Failed to parse private key (PKCS#8 or PKCS#1)")?;
-        let key_id = format!("{}/{}/{}", profile.tenancy, profile.user, profile.fingerprint);
+        let key_id = format!(
+            "{}/{}/{}",
+            profile.tenancy, profile.user, profile.fingerprint
+        );
         Ok(Self { key_id, key })
     }
 
@@ -281,7 +326,9 @@ impl Signer {
         path_and_query: &str,
         body: Option<&[u8]>,
     ) -> Result<HeaderMap> {
-        let date = OffsetDateTime::now_utc().format(&Rfc2822)?.replace("+0000", "GMT");
+        let date = OffsetDateTime::now_utc()
+            .format(&Rfc2822)?
+            .replace("+0000", "GMT");
         let request_target = format!("{} {}", method.as_str().to_lowercase(), path_and_query);
 
         let mut header_items = Vec::new();
@@ -371,7 +418,8 @@ fn extract_pem_block(raw: &str) -> Option<String> {
     let start = raw.find("-----BEGIN ")?;
     let end_marker = "-----END ";
     let end_start = raw.find(end_marker)?;
-    let end_line_end = raw[end_start..].find("-----\n")
+    let end_line_end = raw[end_start..]
+        .find("-----\n")
         .or_else(|| raw[end_start..].find("-----\r\n"))
         .or_else(|| {
             // handle case where END marker is at very end of file with no newline

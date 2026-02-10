@@ -178,24 +178,19 @@ Open `http://127.0.0.1:8080`, enter your `admin_key`, and use the UI to:
 
 ---
 
-## Linux Automated Installation (Ubuntu/CentOS/Oracle Linux)
+## Linux One-Click Installation (Ubuntu/CentOS/ARM/x86)
 
-For production setup with **systemd** (ARM64 or x64):
+Run this command on your Linux server to automatically download the latest binary and setup the **systemd** service on port `9927`:
 
-1. **Download binary & script**: Get the appropriate `oci-manager` binary for your architecture from [Releases](../../releases) and the `install.sh` script.
-2. **Run Installer**:
-   ```bash
-   chmod +x install.sh
-   sudo ./install.sh
-   ```
-3. **Configure**:
-   - Edit `/etc/oci-manager/config` with your OCI credentials.
-   - Place your API `.pem` key at `/etc/oci-manager/key.pem`.
-4. **Start Service**:
-   ```bash
-   sudo systemctl enable --now oci-manager
-   ```
-   *Web UI will be live at `http://your-server-ip:8080`*
+```bash
+curl -sSf https://raw.githubusercontent.com/umalaaa/oci-manager/main/install.sh | sudo bash
+```
+
+### After Installation:
+1. **Configure**: `sudo nano /etc/oci-manager/config` (fill in your OCIDs).
+2. **Key**: Place your OCI API `.pem` key at `/etc/oci-manager/key.pem`.
+3. **Start**: `sudo systemctl enable --now oci-manager`
+4. **Access**: Open `http://your-server-ip:9927` in your browser.
 
 
 ### Cron Mode (Background / Scheduled)

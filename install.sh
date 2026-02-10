@@ -5,61 +5,69 @@
 
 set -e
 
-# Use localized messages
+REPO="umalaaa/oci-manager"
+BINARY_NAME="oci-manager"
+INSTALL_DIR="/usr/local/bin"
+CONF_DIR="/etc/oci-manager"
+PORT=9927
+
 echo "------------------------------------------------"
 echo "OCI Manager Installer / OCI 管理器安装脚本"
 echo "------------------------------------------------"
 
 # 1. Detection
 ARCH=$(uname -m)
-OS_TYPE="linux"
-BINARY_NAME="oci-manager"
-
 if [ "$ARCH" == "x86_64" ]; then
     TARGET="x86_64-unknown-linux-gnu"
+    FILENAME="oci-manager-x86_64-unknown-linux-gnu.tar.gz"
 elif [ "$ARCH" == "aarch64" ]; then
     TARGET="aarch64-unknown-linux-gnu"
+    FILENAME="oci-manager-aarch64-unknown-linux-gnu.tar.gz"
 else
     echo "Unsupported architecture: $ARCH"
     exit 1
 fi
 
-# 2. Check if binary exists in current dir, or ask where it is
-if [ -f "./$BINARY_NAME" ]; then
-    echo "Found binary in current directory."
-else
-    echo "Binary '$BINARY_NAME' not found in current directory."
-    echo "Please download it from GitHub Releases first."
-    exit 1
+# 2. Download Binary if not present
+if [ ! -f "./$BINARY_NAME" ]; then
+    echo "Downloading latest release for $ARCH..."
+    LATEST_URL=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep "browser_download_url" | grep "$TARGET" | cut -d '"' -f 4)
+    if [ -z "$LATEST_URL" ]; then
+        echo "Error: Could not find download URL for $TARGET. Is the release published?"
+        exit 1
+    fi
+    curl -L "$LATEST_URL" -o "$FILENAME"
+    tar -xzf "$FILENAME"
+    rm "$FILENAME"
 fi
 
-# 3. Setup Directories
-INSTALL_DIR="/usr/local/bin"
-CONF_DIR="/etc/oci-manager"
-
+# 3. Setup Directories & Binary
+echo "Installing to $INSTALL_DIR..."
 sudo mkdir -p $CONF_DIR
 sudo cp "./$BINARY_NAME" "$INSTALL_DIR/"
 sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
 # 4. Check for config file
 if [ ! -f "$CONF_DIR/config" ]; then
-    echo "Creating dummy config at $CONF_DIR/config"
-    echo "Please edit this file with your OCI credentials!"
+    echo "Creating initial config at $CONF_DIR/config"
+    GEN_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
     sudo bash -c "cat <<EOF > $CONF_DIR/config
+# Web UI Settings
+enable_admin=true
+admin_key=$GEN_KEY
+port=$PORT
+
 [DEFAULT]
 user=ocid1.user.oc1..aaaaaaa
-fingerprint=00:00:00...
+fingerprint=aa:bb:cc...
 tenancy=ocid1.tenancy.oc1..aaaaaaa
 region=us-phoenix-1
 key_file=$CONF_DIR/key.pem
-enable_admin=true
-admin_key=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
 EOF"
 fi
 
 # 5. Create Systemd Service
 echo "Configuring systemd service..."
-
 sudo bash -c "cat <<EOF > /etc/systemd/system/oci-manager.service
 [Unit]
 Description=OCI Manager Web Service
@@ -69,7 +77,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$CONF_DIR
-ExecStart=$INSTALL_DIR/$BINARY_NAME --config $CONF_DIR/config serve --host 0.0.0.0 --port 8080
+ExecStart=$INSTALL_DIR/$BINARY_NAME --config $CONF_DIR/config serve --host 0.0.0.0 --port $PORT --allow-remote
 Restart=always
 RestartSec=5
 
@@ -83,9 +91,10 @@ echo ""
 echo "Installation complete! / 安装完成！"
 echo "------------------------------------------------"
 echo "1. Edit config: sudo nano $CONF_DIR/config"
-echo "2. Place your .pem key in: $CONF_DIR/key.pem"
+echo "2. Place your OCI API key (.pem) in: $CONF_DIR/key.pem"
 echo "3. Start service: sudo systemctl start oci-manager"
 echo "4. Enable on boot: sudo systemctl enable oci-manager"
-echo "5. Check status: sudo systemctl status oci-manager"
 echo "------------------------------------------------"
-echo "Web UI will be at: http://YOUR_IP:8080"
+echo "Web UI will be at: http://YOUR_SERVER_IP:$PORT"
+echo "Default Admin Key (Keep it safe!): $GEN_KEY"
+echo "------------------------------------------------"
