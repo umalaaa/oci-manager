@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────
+# OCI Manager – .gitignore
+# ─────────────────────────────────────────────
+
+# ── Rust / Cargo ──────────────────────────────
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# ── Secrets & Credentials (CRITICAL) ─────────
+# NEVER commit real OCI config or private keys
+config
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+.env
+.env.*
+
+# ── Logs ──────────────────────────────────────
+*.log
+debug.log
+build_err.log
+
+# ── OS Generated ──────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ── IDE / Editor ──────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── Misc ──────────────────────────────────────
+*.bak
+*.tmp
+*.orig

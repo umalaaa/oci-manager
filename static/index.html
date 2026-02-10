@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OCI Compute Manager</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f1ec;
+      --panel: #fffdf9;
+      --ink: #1f1a14;
+      --muted: #6b5d50;
+      --accent: #a64b2a;
+      --line: #e5ddd2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 10% 10%, #f9f2e7, transparent 40%),
+        radial-gradient(circle at 90% 20%, #fdebd4, transparent 35%),
+        var(--bg);
+      color: var(--ink);
+    }
+
+    header {
+      padding: 24px 32px 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
+      padding: 20px 32px 40px;
+    }
+
+    @media (min-width: 980px) {
+      .container {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 12px 30px rgba(27, 20, 12, 0.08);
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #ffffff;
+      color: var(--ink);
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    @media (min-width: 760px) {
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background: #ede3d8;
+      color: var(--ink);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 8px 6px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag {
+      background: #f1e2d2;
+      color: #6b341f;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+
+    .notice {
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header style="position: relative;">
+    <select id="langSelect" onchange="handleLangChange()" class="secondary"
+      style="position: absolute; top: 16px; right: 16px; width: auto; font-size: 12px; height: auto; padding: 2px 8px;">
+      <option value="en">🌐 English</option>
+      <option value="zh">🌐 中文</option>
+    </select>
+    <h1>OCI Compute Manager</h1>
+    <div class="notice">Simple web UI for OCI compute lifecycle actions.</div>
+    <div class="inline" style="margin-top: 12px;">
+      <label style="margin: 0;" data-i18n="tbl_profile">Profile</label>
+      <select id="profileSelect" onchange="onProfileChange()"></select>
+    </div>
+  </header>
+
+  <div class="container">
+    <section class="panel" oninput="validateForm()" onchange="validateForm()">
+      <h2 data-i18n="create_title">Create Instance</h2>
+      <div style="margin-bottom: 14px;">
+        <div>
+          <label data-i18n="preset">Preset</label>
+          <select id="presetSelect" onchange="applyPreset()" style="max-width: 320px;">
+            <option value="">—</option>
+          </select>
+        </div>
+        <div class="grid two">
+          <div>
+            <label data-i18n="compartment">Compartment</label>
+            <select id="compartment" onchange="onCompartmentChange()">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="subnet">Subnet</label>
+            <select id="subnet">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="ad">Availability Domain</label>
+            <select id="availabilityDomain" onchange="loadAvailability()">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="shape">Shape</label>
+            <select id="shape" onchange="onShapeChange()">
+              <option value="" data-i18n="select_shape">Select...</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="ocpus">OCPUs (Flex)</label>
+            <select id="ocpus" onchange="onOcpuChange()" disabled>
+              <option value="" data-i18n="select_shape_first">—</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="memory">Memory (GB, Flex)</label>
+            <select id="memoryInGBs" disabled>
+              <option value="" data-i18n="select_shape_first">—</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="image_ocid">Image OCID</label>
+            <input id="image" placeholder="ocid1.image..." />
+          </div>
+          <div>
+            <label data-i18n="boot_vol">Boot Volume Size (GB, optional)</label>
+            <input id="bootVolumeSize" placeholder="Default" />
+          </div>
+          <div>
+            <label data-i18n="image_os">Image OS / Version</label>
+            <div class="inline">
+              <select id="imageOs" onchange="onImageOsChange()">
+                <option value="" data-i18n="select_os">Select...</option>
+              </select>
+              <select id="imageVersion">
+                <option value="" data-i18n="select_ver">Select...</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label data-i18n="display_name">Display Name</label>
+            <input id="displayName" placeholder="auto-..." />
+          </div>
+          <div>
+            <label data-i18n="ssh_key">SSH Public Key</label>
+            <input id="sshKey" placeholder="ssh-ed25519 AAAA..." />
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 16px;">
+          <button id="createBtn" onclick="createInstance()" disabled data-i18n="create_btn">Create</button>
+        </div>
+        <div id="createStatus" class="notice" style="margin-top: 10px;"></div>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="tasks_title">Tasks</h2>
+      <div class="actions" style="margin-bottom: 12px;">
+        <button class="secondary" onclick="loadTasks()" data-i18n="refresh_btn">Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="tbl_profile">Profile</th>
+            <th data-i18n="tbl_desc">Description</th>
+            <th data-i18n="tbl_status">Status</th>
+            <th data-i18n="tbl_retries">Retries</th>
+            <th data-i18n="tbl_actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="taskTable">
+          <tr>
+            <td colspan="5" class="muted">No tasks.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="instances_title">Instances</h2>
+      <div class="actions" style="margin-bottom: 12px;">
+        <button onclick="loadInstances()" data-i18n="refresh_btn">Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="inst_id">ID</th>
+            <th data-i18n="inst_name">Name</th>
+            <th data-i18n="inst_state">State</th>
+            <th data-i18n="inst_shape">Shape</th>
+            <th data-i18n="inst_actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="instanceTable">
+          <tr>
+            <td colspan="5" class="muted">No data loaded.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2 data-i18n="availability_title">Availability</h2>
+      <div class="actions" style="margin-bottom: 12px;">
+        <button onclick="loadAvailability()" data-i18n="check_availability">Check Availability</button>
+      </div>
+      <div id="availabilityResult" class="notice"></div>
+    </section>
+  </div>
+
+  <script>
+    // i18n
+    let currentLang = localStorage.getItem('lang') || 'en';
+    const dict = {
+      en: {
+        create_title: "Create Instance",
+        preset: "Preset",
+        compartment: "Compartment",
+        subnet: "Subnet",
+        ad: "Availability Domain",
+        shape: "Shape",
+        ocpus: "OCPUs (Flex)",
+        memory: "Memory (GB, Flex)",
+        image_ocid: "Image OCID",
+        boot_vol: "Boot Volume Size (GB, optional)",
+        image_os: "Image OS / Version",
+        display_name: "Display Name",
+        ssh_key: "SSH Public Key",
+        create_btn: "Create",
+        tasks_title: "Tasks",
+        refresh_btn: "Refresh",
+        stop_btn: "Stop",
+        tbl_profile: "Profile",
+        tbl_desc: "Description",
+        tbl_status: "Status",
+        tbl_retries: "Retries",
+        tbl_actions: "Actions",
+        instances_title: "Instances",
+        inst_id: "ID",
+        inst_name: "Name",
+        inst_state: "State",
+        inst_shape: "Shape",
+        inst_ip: "Public IP",
+        inst_created: "Created",
+        inst_actions: "Actions",
+        availability_title: "Availability",
+        check_availability: "Check Availability",
+        status_pending: "⏳ Pending",
+        status_running: "🔄 Running",
+        status_retrying: "⏳ Retrying",
+        status_success: "✅ Success",
+        status_cancelled: "⛔ Cancelled",
+        status_failed: "❌ Failed",
+        select_shape: "Select shape...",
+        select_os: "Select OS...",
+        select_ver: "Select version...",
+        select_opt: "Select...",
+        loading: "Loading...",
+        loading_compartments: "Loading compartments...",
+        loading_subnets: "Loading subnets...",
+        loading_ads: "Loading ADs...",
+        out_of_capacity: "Host Capacity Full (Retrying...)",
+        no_tasks: "No tasks.",
+        no_data: "No data loaded.",
+        attempt: "attempt",
+        queueing: "Queueing...",
+        queued: "Task Queued: ",
+        confirm_stop: "Stop task?",
+        select_shape_first: "Select shape first",
+        error_prefix: "Error: ",
+        ad_list_title: "Availability Domains",
+        shape_list_title: "Shapes",
+        none: "— None —"
+      },
+      zh: {
+        create_title: "创建实例",
+        preset: "预设配置",
+        compartment: "分区 (Compartment)",
+        subnet: "子网 (Subnet)",
+        ad: "可用区 (Availability Domain)",
+        shape: "配置 (Shape)",
+        ocpus: "CPU 核数 (Flex)",
+        memory: "内存 (GB, Flex)",
+        image_ocid: "镜像 OCID",
+        boot_vol: "启动卷大小 (GB, 可选)",
+        image_os: "镜像系统 / 版本",
+        display_name: "实例名称",
+        ssh_key: "SSH 公钥",
+        create_btn: "创建",
+        tasks_title: "任务列表",
+        refresh_btn: "刷新列表",
+        stop_btn: "停止",
+        tbl_profile: "配置文件",
+        tbl_desc: "描述",
+        tbl_status: "状态",
+        tbl_retries: "重试",
+        tbl_actions: "操作",
+        instances_title: "实例列表",
+        inst_id: "ID",
+        inst_name: "名称",
+        inst_state: "状态",
+        inst_shape: "配置",
+        inst_ip: "公网 IP",
+        inst_created: "创建时间",
+        inst_actions: "操作",
+        availability_title: "资源可用性",
+        check_availability: "检查可用性",
+        status_pending: "⏳ 等待中",
+        status_running: "🔄 进行中",
+        status_retrying: "⏳ 重试中",
+        status_success: "✅ 成功",
+        status_cancelled: "⛔ 已取消",
+        status_failed: "❌ 失败",
+        select_shape: "选择配置...",
+        select_os: "选择系统...",
+        select_ver: "选择版本...",
+        select_opt: "请选择...",
+        loading: "加载中...",
+        loading_compartments: "加载分区中...",
+        loading_subnets: "加载子网中...",
+        loading_ads: "加载可用区中...",
+        out_of_capacity: "主机容量不足 (Out of capacity)",
+        no_tasks: "暂无任务",
+        no_data: "暂无数据",
+        attempt: "次尝试",
+        queueing: "提交中...",
+        queued: "任务已提交: ",
+        confirm_stop: "确定停止任务吗？",
+        select_shape_first: "请先选择配置",
+        error_prefix: "错误: ",
+        ad_list_title: "可用区列表",
+        shape_list_title: "配置列表",
+        none: "— 无 —"
+      }
+    };
+
+    function t(key) { return dict[currentLang][key] || key; }
+
+    function handleLangChange() {
+      currentLang = document.getElementById('langSelect').value;
+      localStorage.setItem('lang', currentLang);
+      updatePageLang();
+    }
+
+    function updatePageLang() {
+      const sel = document.getElementById('langSelect');
+      if (sel) {
+        sel.value = currentLang;
+      }
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+      });
+      loadTasks(); // Refresh tasks text
+      const presetSel = document.getElementById('presetSelect');
+      if (presetSel.options.length > 0 && presetSel.options[0].value === "") {
+        presetSel.options[0].text = t("none");
+      }
+    }
+
+    // Init lang on load
+    document.addEventListener("DOMContentLoaded", () => updatePageLang());
+
+    let shapesCache = [];
+    const tableColumns = 5;
+
+    function clearChildren(element) {
+      if (!element) return;
+      while (element.firstChild) {
+        element.removeChild(element.firstChild);
+      }
+    }
+
+    function setTableMessage(table, message, columns = tableColumns) {
+      clearChildren(table);
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = columns;
+      cell.className = "muted";
+      cell.textContent = message;
+      row.appendChild(cell);
+      table.appendChild(row);
+    }
+
+    function addOption(select, value, label, selected = false) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      if (selected) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    }
+
+    function setSelectPlaceholder(select, label) {
+      clearChildren(select);
+      addOption(select, "", label);
+    }
+
+    function textCell(text) {
+      const cell = document.createElement("td");
+      cell.textContent = text ?? "";
+      return cell;
+    }
+
+    function actionButton(label, className, handler) {
+      const button = document.createElement("button");
+      if (className) {
+        button.className = className;
+      }
+      button.textContent = label;
+      button.addEventListener("click", handler);
+      return button;
+    }
+
+    async function loadInstances() {
+      const compartment = document.getElementById("compartment").value;
+      const params = new URLSearchParams();
+      if (compartment) params.set("compartment", compartment);
+      const profile = selectedProfile();
+      if (profile) params.set("profile", profile);
+      const response = await fetch(`/api/instances?${params.toString()}`);
+      const table = document.getElementById("instanceTable");
+      if (!response.ok) {
+        setTableMessage(table, t("error_prefix") + await response.text());
+        return;
+      }
+      const data = await response.json();
+      if (!data.length) {
+        setTableMessage(table, t("no_data"));
+        return;
+      }
+      clearChildren(table);
+      data.forEach(instance => {
+        const row = document.createElement("tr");
+        row.appendChild(textCell(instance.id));
+        row.appendChild(textCell(instance.displayName));
+        const stateCell = document.createElement("td");
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = instance.lifecycleState;
+        stateCell.appendChild(tag);
+        row.appendChild(stateCell);
+        row.appendChild(textCell(instance.shape));
+        const actions = document.createElement("td");
+        actions.appendChild(actionButton("Reboot", "secondary", () => rebootInstance(instance.id, false)));
+        actions.appendChild(actionButton("Hard", "secondary", () => rebootInstance(instance.id, true)));
+        actions.appendChild(actionButton("Terminate", "", () => terminateInstance(instance.id)));
+        row.appendChild(actions);
+        table.appendChild(row);
+      });
+    }
+
+    async function createInstance() {
+      const payload = {
+        profile: selectedProfile(),
+        compartment: value("compartment"),
+        subnet: value("subnet"),
+        availability_domain: value("availabilityDomain"),
+        shape: value("shape"),
+        ocpus: numberValue("ocpus"),
+        memoryInGBs: numberValue("memoryInGBs"),
+        bootVolumeSizeInGBs: numberValue("bootVolumeSize"),
+        image: value("image"),
+        image_os: value("imageOs"),
+        image_version: value("imageVersion"),
+        display_name: value("displayName"),
+        ssh_key: value("sshKey")
+      };
+
+      const shapeName = payload.shape ? payload.shape.toUpperCase() : "";
+      if (!shapeName.includes(".FLEX") && (payload.ocpus || payload.memoryInGBs)) {
+        // Warn but allow
+      }
+
+      const btn = document.getElementById("createBtn");
+      btn.disabled = true;
+      btn.innerText = t("queueing");
+
+      try {
+        const response = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          document.getElementById("createStatus").textContent = t("error_prefix") + text;
+          btn.disabled = false;
+          btn.innerText = t("create_btn");
+          return;
+        }
+
+        const data = await response.json();
+        document.getElementById("createStatus").textContent = t("queued") + data.taskId;
+        loadTasks();
+
+        // Reset button after delay
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = t("create_btn");
+          validateForm();
+        }, 1000);
+      } catch (e) {
+        document.getElementById("createStatus").textContent = "Error: " + e;
+        btn.disabled = false;
+        btn.innerText = t("create_btn");
+      }
+    }
+
+    async function loadTasks() {
+      const response = await fetch("/api/tasks");
+      if (!response.ok) return;
+      const tasks = await response.json();
+      const table = document.getElementById("taskTable");
+      if (!tasks.length) {
+        setTableMessage(table, t("no_tasks"), 5);
+        return;
+      }
+      // Sort by created_at desc
+      tasks.sort((a, b) => b.created_at - a.created_at);
+
+      clearChildren(table);
+      tasks.forEach(task => {
+        const row = document.createElement("tr");
+        const profileName = task.target_profile || task.targetProfile || "";
+        row.appendChild(textCell(profileName));
+        row.appendChild(textCell(task.description || ""));
+
+        const statusCell = document.createElement("td");
+        statusCell.style.maxWidth = "360px";
+
+        const statusTag = document.createElement("span");
+        statusTag.className = "tag";
+
+        let statusText = "";
+        let isActive = false;
+
+        if (task.status === "Pending") {
+          statusText = t("status_pending");
+          isActive = true;
+        } else if (task.status === "Running") {
+          statusText = `${t("status_running")} (${t("attempt")} #${task.retry_count})`;
+          statusTag.style.background = "#fff4e5";
+          statusTag.style.color = "#663c00";
+          isActive = true;
+        } else if (task.status === "Cancelled") {
+          statusText = t("status_cancelled");
+          statusTag.style.background = "#e8eaf6";
+          statusTag.style.color = "#37474f";
+        } else if (typeof task.status === "object") {
+          if (task.status.Success) {
+            statusText = t("status_success") + ": " + task.status.Success;
+            statusTag.style.background = "#e6f4ea";
+            statusTag.style.color = "#1e4620";
+          } else if (task.status.Retrying) {
+            // Actively retrying — show countdown
+            let countdown = "";
+            if (task.next_retry_at) {
+              const secsLeft = Math.max(0, task.next_retry_at - Math.floor(Date.now() / 1000));
+              countdown = ` (${secsLeft}s)`;
+            }
+            statusText = `${t("status_retrying")}${countdown}`;
+            statusTag.style.background = "#fff4e5";
+            statusTag.style.color = "#663c00";
+            isActive = true;
+          } else if (task.status.Failed) {
+            statusText = t("status_failed") + ": " + task.status.Failed;
+            statusTag.style.background = "#fce8e6";
+            statusTag.style.color = "#c5221f";
+          } else {
+            statusText = JSON.stringify(task.status);
+          }
+        } else {
+          statusText = String(task.status ?? "");
+        }
+
+        statusTag.textContent = statusText;
+        statusCell.appendChild(statusTag);
+
+        // Show last error underneath if retrying
+        if (task.last_error && isActive) {
+          const errDiv = document.createElement("div");
+          errDiv.className = "notice";
+          errDiv.style.marginTop = "4px";
+          errDiv.style.fontSize = "11px";
+          errDiv.style.wordBreak = "break-word";
+          let errShow = task.last_error;
+          if (errShow.includes("Out of host capacity")) {
+            errShow = t("out_of_capacity");
+          }
+          errDiv.textContent = errShow;
+          statusCell.appendChild(errDiv);
+        }
+
+        row.appendChild(statusCell);
+        row.appendChild(textCell(String(task.retry_count || 0)));
+
+        // Actions column
+        const actionsCell = document.createElement("td");
+        if (isActive && !task.cancelled) {
+          actionsCell.appendChild(actionButton(t("stop_btn"), "", () => cancelTask(task.id)));
+        }
+        row.appendChild(actionsCell);
+
+        table.appendChild(row);
+      });
+    }
+
+    async function cancelTask(taskId) {
+      const response = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+      if (!response.ok) {
+        alert(await response.text());
+        return;
+      }
+      loadTasks();
+    }
+
+    async function terminateInstance(id) {
+      const profile = selectedProfile();
+      const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : "";
+      const response = await fetch(`/api/instances/${id}${suffix}`, { method: "DELETE" });
+      if (!response.ok) {
+        alert(await response.text());
+        return;
+      }
+      loadInstances();
+    }
+
+    async function rebootInstance(id, hard) {
+      const profile = selectedProfile();
+      const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : "";
+      const response = await fetch(`/api/instances/${id}/reboot${suffix}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hard })
+      });
+      if (!response.ok) {
+        alert(await response.text());
+        return;
+      }
+      loadInstances();
+    }
+
+    async function loadAvailability() {
+      const compartment = value("compartment");
+      const availabilityDomain = value("availabilityDomain");
+      if (!compartment || !availabilityDomain) {
+        return;
+      }
+      const params = new URLSearchParams();
+      params.set("compartment", compartment);
+      params.set("availability_domain", availabilityDomain);
+      const profile = selectedProfile();
+      if (profile) params.set("profile", profile);
+      const response = await fetch(`/api/availability?${params.toString()}`);
+      const target = document.getElementById("availabilityResult");
+      if (!response.ok) {
+        target.textContent = await response.text();
+        return;
+      }
+      const data = await response.json();
+      shapesCache = data.shapes || [];
+      populateShapeOptions();
+      clearChildren(target);
+
+      const adTitle = document.createElement("strong");
+      adTitle.textContent = t("ad_list_title");
+      target.appendChild(adTitle);
+      const adList = document.createElement("ul");
+      const ads = data.availability_domains || data.availabilityDomains || [];
+      ads.forEach(ad => {
+        const item = document.createElement("li");
+        item.appendChild(document.createTextNode(`${ad.name} `));
+        const span = document.createElement("span");
+        span.className = "muted";
+        span.textContent = ad.id;
+        item.appendChild(span);
+        adList.appendChild(item);
+      });
+      target.appendChild(adList);
+
+      if (data.shapes) {
+        const shapesTitle = document.createElement("strong");
+        shapesTitle.textContent = t("shape_list_title");
+        target.appendChild(shapesTitle);
+        const shapeList = document.createElement("ul");
+        data.shapes.forEach(shape => {
+          const ocpuText = shape.ocpuOptions
+            ? `${shape.ocpuOptions.min}-${shape.ocpuOptions.max} OCPUs`
+            : `${shape.ocpus || 0} OCPUs`;
+          let memText = `${shape.memoryInGBs || 0} GB`;
+          if (shape.memoryOptions && shape.memoryOptions.minInGBs && shape.memoryOptions.maxInGBs) {
+            memText = `${shape.memoryOptions.minInGBs}-${shape.memoryOptions.maxInGBs} GB`;
+          }
+          const cpu = shape.processorDescription ? ` - ${shape.processorDescription}` : "";
+          const item = document.createElement("li");
+          item.textContent = `${shape.shape} (${ocpuText}, ${memText})${cpu}`;
+          shapeList.appendChild(item);
+        });
+        target.appendChild(shapeList);
+      }
+    }
+
+    function populateShapeOptions() {
+      const sel = document.getElementById("shape");
+      const currentVal = sel.value;
+      clearChildren(sel);
+      addOption(sel, "", t("select_shape"));
+      const shapes = shapesCache;
+      shapes.forEach(shape => {
+        const label = shape.processorDescription
+          ? `${shape.shape} (${shape.processorDescription})`
+          : shape.shape;
+        addOption(sel, shape.shape, label);
+      });
+      // Restore previous selection if still available
+      if (currentVal) sel.value = currentVal;
+      onShapeChange();
+    }
+
+    function onShapeChange() {
+      const shapeName = value("shape");
+      const shape = shapesCache.find(item => item.shape === shapeName);
+      populateOcpuOptions(shape);
+      populateMemoryOptions(shape);
+      validateForm();
+    }
+
+    function onOcpuChange() {
+      const shapeName = value("shape");
+      const shape = shapesCache.find(item => item.shape === shapeName);
+      populateMemoryOptions(shape);
+      validateForm();
+    }
+
+    function populateOcpuOptions(shape) {
+      const sel = document.getElementById("ocpus");
+      const currentVal = sel.value;
+      clearChildren(sel);
+      if (!shape || !shape.ocpuOptions || shape.ocpuOptions.min == null || shape.ocpuOptions.max == null) {
+        addOption(sel, "", "—");
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      const min = Math.round(shape.ocpuOptions.min);
+      const max = Math.round(shape.ocpuOptions.max);
+      addOption(sel, "", t("select_opt"));
+      for (let i = min; i <= max; i += 1) {
+        addOption(sel, String(i), `${i} OCPU${i > 1 ? 's' : ''}`);
+      }
+      if (currentVal) sel.value = currentVal;
+    }
+
+    function populateMemoryOptions(shape) {
+      const sel = document.getElementById("memoryInGBs");
+      const currentVal = sel.value;
+      clearChildren(sel);
+      if (!shape || !shape.memoryOptions) {
+        addOption(sel, "", "—");
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      const ocpus = Number(value("ocpus"));
+      const range = memoryRange(shape, ocpus);
+      if (!range) {
+        addOption(sel, "", "Select OCPUs first");
+        return;
+      }
+      const min = Math.round(range.min);
+      const max = Math.round(range.max);
+      const span = max - min;
+      let step = 1;
+      if (span > 128) step = 4;
+      if (span > 512) step = 8;
+      addOption(sel, "", t("select_opt"));
+      for (let val = min; val <= max; val += step) {
+        addOption(sel, String(val), `${val} GB`);
+      }
+      if (currentVal) sel.value = currentVal;
+    }
+
+    // Image OS / Version population
+    const imageOsVersions = {
+      "Canonical Ubuntu": ["24.04", "22.04", "20.04"],
+      "Oracle Linux": ["9", "8", "7.9"],
+      "CentOS": ["8", "7"],
+      "Oracle Autonomous Linux": ["8.x", "7.x"],
+      "Windows": ["Server 2022 Standard", "Server 2019 Standard"],
+    };
+
+    function populateImageOs() {
+      const sel = document.getElementById("imageOs");
+      clearChildren(sel);
+      addOption(sel, "", t("select_os"));
+      Object.keys(imageOsVersions).forEach(os => {
+        addOption(sel, os, os);
+      });
+    }
+
+    function onImageOsChange() {
+      const os = value("imageOs");
+      const sel = document.getElementById("imageVersion");
+      clearChildren(sel);
+      addOption(sel, "", t("select_ver"));
+      const versions = imageOsVersions[os] || [];
+      versions.forEach(v => {
+        addOption(sel, v, v);
+      });
+      validateForm();
+    }
+
+    function memoryRange(shape, ocpus) {
+      const options = shape.memoryOptions;
+      if (!options) return null;
+      let min = options.minInGBs ?? null;
+      let max = options.maxInGBs ?? null;
+      if (options.minPerOcpuInGBs && ocpus) {
+        const calc = options.minPerOcpuInGBs * ocpus;
+        min = min == null ? calc : Math.max(min, calc);
+      }
+      if (options.maxPerOcpuInGBs && ocpus) {
+        const calc = options.maxPerOcpuInGBs * ocpus;
+        max = max == null ? calc : Math.min(max, calc);
+      }
+      if (min == null || max == null) return null;
+      return { min, max };
+    }
+
+    function isArmShape(shape) {
+      const name = (shape.shape || "").toUpperCase();
+      const cpu = (shape.processorDescription || "").toUpperCase();
+      return name.includes(".A1.") || name.includes(".A2.") || cpu.includes("AMPERE") || cpu.includes("ARM");
+    }
+
+    function isAmdShape(shape) {
+      const name = (shape.shape || "").toUpperCase();
+      const cpu = (shape.processorDescription || "").toUpperCase();
+      return name.includes(".E4.") || name.includes(".E5.") || name.includes(".E6.") || cpu.includes("AMD");
+    }
+
+    async function loadProfiles() {
+      const response = await fetch("/api/profiles");
+      const select = document.getElementById("profileSelect");
+      if (!response.ok) {
+        setSelectPlaceholder(select, "DEFAULT");
+        return;
+      }
+      const data = await response.json();
+      clearChildren(select);
+      data.profiles.forEach(name => {
+        addOption(select, name, name, name === data.default);
+      });
+      await loadDefaults();
+    }
+
+    async function loadDefaults() {
+      const profile = selectedProfile();
+      const params = new URLSearchParams();
+      if (profile) params.set('profile', profile);
+      // Load compartments from OCI and defaults in parallel
+      const [, defaultsResp] = await Promise.all([
+        loadCompartments(),
+        fetch(`/api/defaults?${params.toString()}`)
+      ]);
+      if (defaultsResp.ok) {
+        const d = await defaultsResp.json();
+        if (d.compartment) setField('compartment', d.compartment);
+        if (d.ssh_public_key) setField('sshKey', d.ssh_public_key);
+        if (d.shape) {
+          ensureOption('shape', d.shape, d.shape);
+          setField('shape', d.shape);
+        }
+        if (d.availability_domain) setField('availabilityDomain', d.availability_domain);
+        if (d.image) setField('image', d.image);
+        if (d.image_os) {
+          ensureOption('imageOs', d.image_os, d.image_os);
+          setField('imageOs', d.image_os);
+          onImageOsChange();
+        }
+        if (d.image_version) {
+          ensureOption('imageVersion', d.image_version, d.image_version);
+          setField('imageVersion', d.image_version);
+        }
+        if (d.boot_volume_size_gbs) setField('bootVolumeSize', d.boot_volume_size_gbs);
+        if (d.display_name_prefix) {
+          const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          setField('displayName', d.display_name_prefix + '-' + today);
+        }
+        // Enable and set ocpus/memory if flex shape
+        const shapeName = (d.shape || '').toUpperCase();
+        if (shapeName.includes('.FLEX')) {
+          if (d.ocpus != null) {
+            const ocpuSel = document.getElementById('ocpus');
+            ocpuSel.disabled = false;
+            ensureOption('ocpus', String(d.ocpus), `${d.ocpus} OCPU${d.ocpus > 1 ? 's' : ''}`);
+            setField('ocpus', d.ocpus);
+          }
+          if (d.memory_in_gbs != null) {
+            const memSel = document.getElementById('memoryInGBs');
+            memSel.disabled = false;
+            ensureOption('memoryInGBs', String(d.memory_in_gbs), `${d.memory_in_gbs} GB`);
+            setField('memoryInGBs', d.memory_in_gbs);
+          }
+        }
+      }
+      await Promise.all([loadSubnets(), loadAvailabilityDomains(), loadInstances()]);
+    }
+
+    async function loadCompartments() {
+      const sel = document.getElementById('compartment');
+      const profile = selectedProfile();
+      setSelectPlaceholder(sel, "Loading compartments...");
+      const params = new URLSearchParams();
+      if (profile) params.set('profile', profile);
+      try {
+        const response = await fetch(`/api/compartments?${params.toString()}`);
+        if (!response.ok) {
+          setSelectPlaceholder(sel, "Error loading compartments");
+          return;
+        }
+        const compartments = await response.json();
+        clearChildren(sel);
+        if (!compartments.length) {
+          setSelectPlaceholder(sel, "No compartments found");
+          return;
+        }
+        compartments.forEach(c => {
+          addOption(sel, c.id, c.name);
+        });
+      } catch (e) {
+        setSelectPlaceholder(sel, "Failed to load compartments");
+      }
+    }
+
+    async function loadAvailabilityDomains() {
+      const sel = document.getElementById('availabilityDomain');
+      const compartment = value('compartment');
+      const profile = selectedProfile();
+      if (!compartment) {
+        setSelectPlaceholder(sel, "Set compartment first");
+        return;
+      }
+      setSelectPlaceholder(sel, "Loading ADs...");
+      const params = new URLSearchParams();
+      params.set('compartment', compartment);
+      if (profile) params.set('profile', profile);
+      try {
+        const response = await fetch(`/api/availability?${params.toString()}`);
+        if (!response.ok) {
+          setSelectPlaceholder(sel, "Error loading ADs");
+          return;
+        }
+        const data = await response.json();
+        const ads = data.availabilityDomains || data.availability_domains; // Handle potential casing
+        if (!ads || !ads.length) {
+          setSelectPlaceholder(sel, "No ADs found");
+          return;
+        }
+        clearChildren(sel);
+        ads.forEach(ad => {
+          addOption(sel, ad.name, ad.name);
+        });
+        // Auto-load shapes for the first AD
+        if (ads.length > 0) {
+          loadAvailability();
+        }
+      } catch (e) {
+        setSelectPlaceholder(sel, "Failed to load ADs");
+      }
+    }
+
+    async function onCompartmentChange() {
+      await Promise.all([loadSubnets(), loadAvailabilityDomains()]);
+    }
+
+    async function onProfileChange() {
+      document.getElementById('presetSelect').value = '';
+      await loadDefaults();
+    }
+
+    async function loadSubnets() {
+      const sel = document.getElementById('subnet');
+      const compartment = value('compartment');
+      const profile = selectedProfile();
+      if (!compartment) {
+        setSelectPlaceholder(sel, "Set compartment first");
+        return;
+      }
+      setSelectPlaceholder(sel, "Loading...");
+      const params = new URLSearchParams();
+      params.set('compartment', compartment);
+      if (profile) params.set('profile', profile);
+      try {
+        const response = await fetch(`/api/subnets?${params.toString()}`);
+        if (!response.ok) {
+          setSelectPlaceholder(sel, "Error loading subnets");
+          return;
+        }
+        const subnets = await response.json();
+        if (!subnets.length) {
+          setSelectPlaceholder(sel, "No subnets found");
+          return;
+        }
+        clearChildren(sel);
+        subnets.forEach(s => {
+          const cidr = s.cidrBlock ? ` (${s.cidrBlock})` : '';
+          addOption(sel, s.id, `${s.displayName}${cidr}`);
+        });
+      } catch (e) {
+        setSelectPlaceholder(sel, "Failed to load subnets");
+      }
+    }
+
+    function value(id) {
+      const input = document.getElementById(id);
+      return input && input.value.trim() ? input.value.trim() : null;
+    }
+
+    function numberValue(id) {
+      const raw = value(id);
+      if (!raw) return null;
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : null;
+    }
+
+    function selectedProfile() {
+      const select = document.getElementById("profileSelect");
+      return select && select.value ? select.value : null;
+    }
+
+    let presetsCache = [];
+
+    async function loadPresets() {
+      const response = await fetch('/api/presets');
+      const select = document.getElementById('presetSelect');
+      if (!response.ok) return;
+      presetsCache = await response.json();
+      clearChildren(select);
+      addOption(select, "", "— None —");
+      presetsCache.forEach(preset => {
+        addOption(select, preset.name, preset.name);
+      });
+    }
+
+    async function applyPreset() {
+      const name = document.getElementById('presetSelect').value;
+      if (!name) {
+        loadDefaults();
+        return;
+      }
+      const preset = presetsCache.find(p => p.name === name);
+      if (!preset) return;
+      if (preset.compartment) setField('compartment', preset.compartment);
+      if (preset.availability_domain) {
+        setField('availabilityDomain', preset.availability_domain);
+        // Load shapes for this AD
+        await loadAvailability();
+      }
+
+      // Shape — ensure option exists in select
+      if (preset.shape) {
+        ensureOption('shape', preset.shape, preset.shape);
+        setField('shape', preset.shape);
+        onShapeChange();
+      }
+
+      // For flex shapes, enable and populate ocpus/memory selects
+      const shapeName = (preset.shape || '').toUpperCase();
+      if (shapeName.includes('.FLEX')) {
+        const ocpuSel = document.getElementById('ocpus');
+        const memSel = document.getElementById('memoryInGBs');
+        ocpuSel.disabled = false;
+        memSel.disabled = false;
+        if (preset.ocpus != null) {
+          ensureOption('ocpus', String(preset.ocpus), `${preset.ocpus} OCPU${preset.ocpus > 1 ? 's' : ''}`);
+          setField('ocpus', preset.ocpus);
+          onOcpuChange();
+        }
+        if (preset.memory_in_gbs != null) {
+          ensureOption('memoryInGBs', String(preset.memory_in_gbs), `${preset.memory_in_gbs} GB`);
+          setField('memoryInGBs', preset.memory_in_gbs);
+        }
+      }
+
+      setField('image', preset.image);
+      setField('bootVolumeSize', preset.boot_volume_size_gbs);
+
+      // Image OS and Version — set OS first, trigger version population, then set version
+      if (preset.image_os) {
+        setField('imageOs', preset.image_os);
+        onImageOsChange();
+        if (preset.image_version) {
+          ensureOption('imageVersion', preset.image_version, preset.image_version);
+          setField('imageVersion', preset.image_version);
+        }
+      }
+
+      if (preset.ssh_public_key) setField('sshKey', preset.ssh_public_key);
+      if (preset.display_name_prefix) {
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        setField('displayName', preset.display_name_prefix + '-' + today);
+      }
+      if (preset.subnet) setField('subnet', preset.subnet);
+    }
+
+    // Ensure a select has an option with the given value; if not, add it.
+    function ensureOption(selectId, val, label) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      for (const opt of sel.options) {
+        if (opt.value === String(val)) return; // already exists
+      }
+      addOption(sel, String(val), label || String(val));
+    }
+
+    function setField(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.value = val != null ? val : '';
+      validateForm(); // Re-validate on set
+    }
+
+    function validateForm() {
+      const btn = document.getElementById('createBtn');
+      if (!btn) return;
+
+      const compartment = value('compartment');
+      const subnet = value('subnet');
+      const ad = value('availabilityDomain');
+      const shape = value('shape');
+      const displayName = value('displayName');
+      const sshKey = value('sshKey');
+
+      // Image source
+      const image = value('image');
+      const imageOs = value('imageOs');
+      const imageVersion = value('imageVersion');
+      const hasImage = image || (imageOs && imageVersion);
+
+      // Flex check
+      let flexValid = true;
+      if (shape && shape.toUpperCase().includes('.FLEX')) {
+        if (!value('ocpus') || !value('memoryInGBs')) {
+          flexValid = false;
+        }
+      }
+
+      if (compartment && subnet && ad && shape && hasImage && displayName && sshKey && flexValid) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      }
+    }
+
+    // Init
+    populateImageOs();
+    loadPresets();
+    loadProfiles();
+    setInterval(loadTasks, 5000);
+    loadTasks();
+  </script>
+</body>
+
+</html>

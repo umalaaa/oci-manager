@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login - OCI Compute Manager</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f1ec;
+            --panel: #fffdf9;
+            --ink: #1f1a14;
+            --accent: #a64b2a;
+            --line: #e5ddd2;
+        }
+
+        body {
+            margin: 0;
+            font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+            background: radial-gradient(circle at 10% 10%, #f9f2e7, transparent 40%),
+                radial-gradient(circle at 90% 20%, #fdebd4, transparent 35%),
+                var(--bg);
+            color: var(--ink);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 30px;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 12px 30px rgba(27, 20, 12, 0.08);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 20px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .error {
+            color: #d32f2f;
+            margin-top: 10px;
+            font-size: 14px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="panel">
+        <h1>OCI Compute Manager</h1>
+        <input type="password" id="key" placeholder="Enter Admin Key" onkeypress="if(event.key==='Enter') login()" />
+        <button onclick="login()">Login</button>
+        <div id="error" class="error">Invalid Key</div>
+    </div>
+    <script>
+        async function login() {
+            const key = document.getElementById('key').value.trim();
+            if (!key) return;
+
+            // Test the key against an API endpoint (e.g. check availability or profiles)
+            // Note: We need a way to verify without setting cookie first? 
+            // Or just set cookie and try to redirect.
+
+            document.cookie = `admin_key=${key}; Path=/; Max-Age=31536000`; // 1 year
+
+            // Verify by fetching API
+            const response = await fetch('/api/profiles');
+            if (response.ok) {
+                window.location.href = '/admin';
+            } else {
+                document.getElementById('error').style.display = 'block';
+                // Clear cookie
+                document.cookie = "admin_key=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+            }
+        }
+    </script>
+</body>
+
+</html>

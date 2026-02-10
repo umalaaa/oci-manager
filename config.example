@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────
+# OCI Manager — Configuration File
+# ─────────────────────────────────────────────────────────────────
+# Copy this file to `config` (or `~/.oci/config`) and fill in
+# your real values.  NEVER commit the real `config` file.
+#
+# Config path priority:
+#   1. --config <path>          (CLI flag)
+#   2. ./config                 (current working directory)
+#   3. ~/.oci/config            (fallback)
+# ─────────────────────────────────────────────────────────────────
+
+[DEFAULT]
+# ── Required ────────────────────────────────────────────────────
+user=ocid1.user.oc1..aaaaaaaaexampleexampleexampleexampleexample
+fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99
+tenancy=ocid1.tenancy.oc1..aaaaaaaaexampleexampleexampleexample
+region=us-phoenix-1
+key_file=/path/to/your/oci_api_key.pem
+
+# ── Optional defaults (uncomment to enable) ─────────────────────
+# compartment=ocid1.compartment.oc1..your_compartment_ocid
+# subnet=ocid1.subnet.oc1..your_subnet_ocid
+# shape=VM.Standard.E4.Flex
+# availability_domain=Uocm:PHX-AD-1
+# ssh_public_key=/path/to/your/id_rsa.pub
+# display_name_prefix=auto
+# boot_volume_size_gbs=50
+
+# ── Web UI authentication ───────────────────────────────────────
+# enable_admin=true
+# admin_key=change-me-to-a-strong-random-key
+
+
+# ─────────────────────────────────────────────────────────────────
+# Additional Profiles
+# ─────────────────────────────────────────────────────────────────
+# You can add as many profiles as needed.  Use --profile <NAME>
+# or the profile selector in the web UI to switch between them.
+
+# [SECONDARY]
+# user=ocid1.user.oc1..example2
+# fingerprint=bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa
+# tenancy=ocid1.tenancy.oc1..example2
+# region=eu-frankfurt-1
+# key_file=/path/to/your/oci_api_key_2.pem
+# ssh_public_key=/path/to/your/id_rsa_2.pub
+
+
+# ─────────────────────────────────────────────────────────────────
+# Presets — reusable instance configurations
+# ─────────────────────────────────────────────────────────────────
+# Name format: [preset:<NAME>]
+# The preset name is shown in the web UI and can be selected before
+# clicking "Create".  All preset fields are optional and override
+# the profile defaults.
+
+[preset:ARM-1cpu-6gb-Ubuntu]
+shape=VM.Standard.A1.Flex
+ocpus=1
+memory_in_gbs=6
+image_os=Canonical Ubuntu
+image_version=22.04
+display_name_prefix=arm-ubuntu
+
+[preset:AMD-1cpu-4gb-OracleLinux]
+shape=VM.Standard.E4.Flex
+ocpus=1
+memory_in_gbs=4
+image_os=Oracle Linux
+image_version=8
+display_name_prefix=amd-ol
+
+[preset:ARM-4cpu-24gb-OracleLinux]
+shape=VM.Standard.A1.Flex
+ocpus=4
+memory_in_gbs=24
+image_os=Oracle Linux
+image_version=8
+display_name_prefix=arm-ol
