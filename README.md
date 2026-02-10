@@ -86,9 +86,50 @@ boot_volume_size_gbs=50                    # Boot volume size (GB)
 ocpus=1                                    # Default OCPUs (Flex shapes)
 memory_in_gbs=6                            # Default memory GB (Flex shapes)
 
-# ── Web UI ────────────────────────────────────
+# ── Web UI (can also go in [global:web]) ──────
 enable_admin=true                          # Enable web UI
 admin_key=your-strong-random-key           # Authentication key
+port=9927                                  # Web UI port
+```
+
+### Global Web Settings (`[global:web]`)
+
+You can separate web server settings from OCI profile credentials using the `[global:web]` section. Properties here are merged into all profiles and used for `serve` command configuration:
+
+```ini
+# These apply globally — no OCI credentials needed here
+[global:web]
+enable_admin=true
+admin_key=your-strong-random-key
+port=9927
+ssh_public_key=ssh-ed25519 AAAA...
+
+# OCI credentials go in profiles
+[DEFAULT]
+user=ocid1.user.oc1..example
+fingerprint=aa:bb:cc:...
+tenancy=ocid1.tenancy.oc1..example
+region=us-phoenix-1
+key_file=~/.oci/key.pem
+```
+
+You can also place global settings at the **top level** of the config file (before any section header) — they behave the same as `[global:web]`.
+
+### Web-Only Mode
+
+The `serve` command can start even without any OCI profiles configured. This is useful for initial setup or when you only need the web UI:
+
+```ini
+# Minimal config — web UI only, no OCI profiles
+[global:web]
+enable_admin=true
+admin_key=your-strong-random-key
+port=9927
+```
+
+```bash
+oci-manager serve
+# Web UI will start; OCI operations will fail until a profile is added
 ```
 
 ### Multiple Profiles
@@ -334,8 +375,8 @@ The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and 
 ### Creating a Release
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 GitHub Actions will build all targets and create a release with downloadable binaries.
