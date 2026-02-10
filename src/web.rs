@@ -125,7 +125,10 @@ pub async fn serve(
         .route("/api/subnets", get(list_subnets))
         .route("/api/compartments", get(list_compartments))
         .route("/api/availability", get(availability))
-        .route("/api/tasks", get(list_tasks).post(queue_instance).delete(clear_tasks))
+        .route(
+            "/api/tasks",
+            get(list_tasks).post(queue_instance).delete(clear_tasks),
+        )
         .route("/api/tasks/:id", delete(delete_task))
         .layer(middleware::from_fn_with_state(
             state.clone(),
