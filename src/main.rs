@@ -41,11 +41,10 @@ async fn main() -> Result<()> {
         }
         Command::Serve(args) => {
             // If profile exists, use it. If not, try to use global props.
-            let (profile_enable_admin, profile_admin_key, profile_port) =
-                match &profile_result {
-                    Ok(p) => (Some(p.enable_admin), p.admin_key.clone(), p.port),
-                    Err(_) => (None, None, None),
-                };
+            let (profile_enable_admin, profile_admin_key, profile_port) = match &profile_result {
+                Ok(p) => (Some(p.enable_admin), p.admin_key.clone(), p.port),
+                Err(_) => (None, None, None),
+            };
 
             // Resolve enable_admin
             let enable_admin = if let Some(enabled) = profile_enable_admin {

@@ -144,7 +144,6 @@ pub async fn serve(
     Ok(())
 }
 
-
 async fn index() -> impl IntoResponse {
     Redirect::to("/login")
 }
