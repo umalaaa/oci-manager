@@ -98,7 +98,7 @@ pub struct AvailabilityArgs {
 pub struct ServeArgs {
     #[arg(long, default_value = "127.0.0.1")]
     pub host: String,
-    #[arg(long, default_value = "8080")]
+    #[arg(long, default_value = "9927")]
     pub port: u16,
     #[arg(long, env = "OCI_ADMIN_KEY")]
     pub admin_key: Option<String>,

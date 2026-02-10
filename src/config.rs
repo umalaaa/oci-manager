@@ -46,6 +46,7 @@ pub struct Profile {
     pub key_file: PathBuf,
     pub defaults: ProfileDefaults,
     pub admin_key: Option<String>,
+    pub port: Option<u16>,
     pub enable_admin: bool,
 }
 
@@ -151,6 +152,7 @@ impl Profile {
         };
 
         let admin_key = optional(props, "admin_key");
+        let port = optional_u64(props, "port")?.map(|v| v as u16);
         let enable_admin = props
             .get("enable_admin")
             .and_then(|v| v.as_deref())
@@ -165,6 +167,7 @@ impl Profile {
             key_file,
             defaults,
             admin_key,
+            port,
             enable_admin,
         })
     }
@@ -287,7 +290,7 @@ user=ocid1.user.oc1..example
 fingerprint=aa:bb:cc
 tenancy=ocid1.tenancy.oc1..example
 region=us-phoenix-1
-key_file=keys\\oci.pem
+key_file=oci.pem
 compartment=ocid1.compartment.oc1..example
 enable_admin=true
 admin_key=secret
@@ -297,7 +300,7 @@ admin_key=secret
         let profile = cfg.profile(Some("DEFAULT")).expect("profile");
         assert_eq!(profile.user, "ocid1.user.oc1..example");
         assert_eq!(profile.defaults.compartment.as_deref(), Some("ocid1.compartment.oc1..example"));
-        assert!(profile.key_file.ends_with("keys\\oci.pem"));
+        assert!(profile.key_file.ends_with("oci.pem"));
         assert_eq!(profile.admin_key.as_deref(), Some("secret"));
         assert!(profile.enable_admin);
     }

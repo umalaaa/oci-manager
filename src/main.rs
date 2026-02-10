@@ -59,12 +59,17 @@ async fn main() -> Result<()> {
             if !args.allow_remote && !is_loopback_host(&args.host) {
                 bail!("Refusing to bind to non-loopback address without --allow-remote.");
             }
+            let port = if args.port != 9927 {
+                args.port
+            } else {
+                profile.port.unwrap_or(args.port)
+            };
             web::serve(
                 config,
                 profile_name,
                 admin_key,
                 args.host,
-                args.port,
+                port,
             )
             .await?;
         }
