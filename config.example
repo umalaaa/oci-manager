@@ -10,10 +10,15 @@
 #   3. ~/.oci/config            (fallback)
 # ─────────────────────────────────────────────────────────────────
 
-# ── Web UI authentication ───────────────────────────────────────
-# enable_admin=true
-# admin_key=change-me-to-a-strong-random-key
-# port=9927
+# ── Global Settings (Web UI / Server) ──────────────────────────
+# You can place these settings at the top level, or under [global:web].
+# They apply to the whole application.
+
+[global:web]
+enable_admin=true
+admin_key=change-me-to-a-strong-random-key
+port=9927
+# ssh_public_key=ssh-rsa ... (optional global default)
 
 # ── Default Profile ──────────────────────────────────────────────
 [DEFAULT]
