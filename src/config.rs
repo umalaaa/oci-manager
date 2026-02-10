@@ -73,14 +73,42 @@ impl OciConfig {
 
         let mut profiles = HashMap::new();
         let mut presets = Vec::new();
+        // Helper to find the "DEFAULT" section regardless of case
+        let default_props = map
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("DEFAULT"))
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+
         for (section, props) in map.iter() {
             let name = section.to_string();
+            // skip processing the DEFAULT section itself as a profile,
+            // unless we want it to be a valid profile.
+            // Usually [DEFAULT] is just for inheritance, but if it contains user/tenancy calls...
+            // Let's treat it as a profile effectively if it has enough info,
+            // OR just use it to backfill others.
+
             if let Some(preset_name) = name.strip_prefix("preset:") {
                 let preset = Preset::from_props(preset_name.trim().to_string(), props)?;
                 presets.push(preset);
             } else {
-                let profile = Profile::from_props(props, &config_dir)?;
-                profiles.insert(name.to_uppercase(), profile);
+                // Merge default_props into this profile's props if keys are missing
+                let mut merged_props = props.clone();
+                for (k, v) in &default_props {
+                    merged_props.entry(k.clone()).or_insert(v.clone());
+                }
+
+                // If this is the DEFAULT section, we still try to parse it as a profile
+                // (it might contain the main credentials).
+                // If it fails (e.g. missing 'user'), we ignore it (it was just global settings).
+                if name.eq_ignore_ascii_case("DEFAULT") {
+                    if let Ok(profile) = Profile::from_props(&merged_props, &config_dir) {
+                        profiles.insert(name.to_uppercase(), profile);
+                    }
+                } else {
+                    let profile = Profile::from_props(&merged_props, &config_dir)?;
+                    profiles.insert(name.to_uppercase(), profile);
+                }
             }
         }
 
