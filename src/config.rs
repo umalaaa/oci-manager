@@ -55,6 +55,7 @@ pub struct OciConfig {
     pub path: PathBuf,
     pub profiles: HashMap<String, Profile>,
     pub presets: Vec<Preset>,
+    pub global_props: HashMap<String, Option<String>>,
 }
 
 impl OciConfig {
@@ -73,28 +74,46 @@ impl OciConfig {
 
         let mut profiles = HashMap::new();
         let mut presets = Vec::new();
-        // Helper to find the "DEFAULT" section regardless of case
-        let default_props = map
+        // Helper to collect global properties from "DEFAULT" and "global:web"
+        let mut global_props = HashMap::new();
+
+        // 1. Merge properties from DEFAULT (top-level keys)
+        if let Some(default_map) = map
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case("DEFAULT"))
             .map(|(_, v)| v.clone())
-            .unwrap_or_default();
+        {
+            for (k, v) in default_map {
+                global_props.insert(k, v);
+            }
+        }
+
+        // 2. Merge properties from [global:web]
+        if let Some(global_web_map) = map
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("global:web"))
+            .map(|(_, v)| v.clone())
+        {
+            for (k, v) in global_web_map {
+                global_props.insert(k, v);
+            }
+        }
 
         for (section, props) in map.iter() {
             let name = section.to_string();
-            // skip processing the DEFAULT section itself as a profile,
-            // unless we want it to be a valid profile.
-            // Usually [DEFAULT] is just for inheritance, but if it contains user/tenancy calls...
-            // Let's treat it as a profile effectively if it has enough info,
-            // OR just use it to backfill others.
+
+            // Skip processing global:web as a profile
+            if name.eq_ignore_ascii_case("global:web") {
+                continue;
+            }
 
             if let Some(preset_name) = name.strip_prefix("preset:") {
                 let preset = Preset::from_props(preset_name.trim().to_string(), props)?;
                 presets.push(preset);
             } else {
-                // Merge default_props into this profile's props if keys are missing
+                // Merge global_props into this profile's props if keys are missing
                 let mut merged_props = props.clone();
-                for (k, v) in &default_props {
+                for (k, v) in &global_props {
                     merged_props.entry(k.clone()).or_insert(v.clone());
                 }
 
@@ -112,15 +131,16 @@ impl OciConfig {
             }
         }
 
-        if profiles.is_empty() {
-            bail!("No profiles found in {}", path.display());
-        }
+        // if profiles.is_empty() {
+        //     bail!("No profiles found in {}", path.display());
+        // }
 
         presets.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(Self {
             path,
             profiles,
             presets,
+            global_props,
         })
     }
 
