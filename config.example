@@ -30,6 +30,7 @@ key_file=/path/to/your/oci_api_key.pem
 # ── Web UI authentication ───────────────────────────────────────
 # enable_admin=true
 # admin_key=change-me-to-a-strong-random-key
+# port=9927
 
 
 # ─────────────────────────────────────────────────────────────────
