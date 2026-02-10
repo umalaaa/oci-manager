@@ -20,19 +20,23 @@ ARCH=$(uname -m)
 IS_ROOT=false
 if [ "$EUID" -eq 0 ]; then IS_ROOT=true; fi
 
-# Set Directories based on permissions
+# Set Base Directory
 if [ "$IS_ROOT" = true ]; then
-    INSTALL_DIR="/usr/local/bin"
-    CONF_DIR="/etc/oci-manager"
+    BASE_DIR="/opt/oci-manager"
     SERVICE_PATH="/etc/systemd/system/oci-manager.service"
     SYSTEMCTL_CMD="systemctl"
 else
-    INSTALL_DIR="$HOME/.local/bin"
-    CONF_DIR="$HOME/.oci-manager"
+    BASE_DIR="$HOME/oci-manager"
+    mkdir -p "$HOME/.config/systemd/user"
     SERVICE_PATH="$HOME/.config/systemd/user/oci-manager.service"
     SYSTEMCTL_CMD="systemctl --user"
-    mkdir -p "$HOME/.config/systemd/user"
 fi
+
+BINARY_PATH="$BASE_DIR/$BINARY_NAME"
+CONFIG_PATH="$BASE_DIR/config"
+VERSION_PATH="$BASE_DIR/version"
+
+echo "Installing to: $BASE_DIR"
 
 if [ "$ARCH" == "x86_64" ]; then
     TARGET="x86_64-unknown-linux-musl"
@@ -49,8 +53,8 @@ fi
 echo "Checking for updates..."
 LATEST_VERSION=$(curl -sSf https://raw.githubusercontent.com/$REPO/main/VERSION | tr -d '[:space:]')
 INSTALLED_VERSION=""
-if [ -f "$CONF_DIR/version" ]; then
-    INSTALLED_VERSION=$(cat "$CONF_DIR/version" | tr -d '[:space:]')
+if [ -f "$VERSION_PATH" ]; then
+    INSTALLED_VERSION=$(cat "$VERSION_PATH" | tr -d '[:space:]')
 fi
 
 if [ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]; then
@@ -60,8 +64,11 @@ fi
 
 echo "Installing version v$LATEST_VERSION (current: ${INSTALLED_VERSION:-none})..."
 
-# 3. Download Binary
-if [ ! -f "./$BINARY_NAME" ]; then
+# 3. Create Directory
+mkdir -p "$BASE_DIR"
+
+# 4. Download Binary
+if [ ! -f "$BINARY_PATH" ] || [ "$INSTALLED_VERSION" != "$LATEST_VERSION" ]; then
     echo "Downloading latest release for $ARCH..."
     LATEST_URL=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep "browser_download_url" | grep "$TARGET" | cut -d '"' -f 4)
     if [ -z "$LATEST_URL" ]; then
@@ -70,21 +77,16 @@ if [ ! -f "./$BINARY_NAME" ]; then
     fi
     curl -L "$LATEST_URL" -o "$FILENAME"
     tar -xzf "$FILENAME"
+    mv "$BINARY_NAME" "$BINARY_PATH"
     rm "$FILENAME"
+    chmod +x "$BINARY_PATH"
 fi
 
-# 4. Setup Directories & Binary
-echo "Installing to $INSTALL_DIR..."
-mkdir -p "$CONF_DIR"
-mkdir -p "$INSTALL_DIR"
-cp "./$BINARY_NAME" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BINARY_NAME"
-
 # 5. Check for config file
-if [ ! -f "$CONF_DIR/config" ]; then
-    echo "Creating initial config at $CONF_DIR/config"
+if [ ! -f "$CONFIG_PATH" ]; then
+    echo "Creating initial config at $CONFIG_PATH"
     GEN_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
-    cat <<EOF > "$CONF_DIR/config"
+    cat <<EOF > "$CONFIG_PATH"
 # Web UI Settings
 enable_admin=true
 admin_key=$GEN_KEY
@@ -95,7 +97,7 @@ user=ocid1.user.oc1..aaaaaaa
 fingerprint=aa:bb:cc...
 tenancy=ocid1.tenancy.oc1..aaaaaaa
 region=us-phoenix-1
-key_file=$CONF_DIR/key.pem
+key_file=$BASE_DIR/key.pem
 EOF
 fi
 
@@ -108,8 +110,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=$CONF_DIR
-ExecStart=$INSTALL_DIR/$BINARY_NAME --config $CONF_DIR/config serve --host 0.0.0.0 --port $PORT --allow-remote
+WorkingDirectory=$BASE_DIR
+ExecStart=$BINARY_PATH --config $CONFIG_PATH serve --host 0.0.0.0 --port $PORT --allow-remote
 Restart=always
 RestartSec=5
 
@@ -118,13 +120,13 @@ WantedBy=default.target
 EOF
 
 # 7. Finalize
-echo "$LATEST_VERSION" > "$CONF_DIR/version"
+echo "$LATEST_VERSION" > "$VERSION_PATH"
 $SYSTEMCTL_CMD daemon-reload
 echo ""
 echo "Installation complete! / 安装完成！"
 echo "------------------------------------------------"
-echo "1. Edit config: nano $CONF_DIR/config"
-echo "2. Place your OCI API key (.pem) in: $CONF_DIR/key.pem"
+echo "1. Edit config: nano $CONFIG_PATH"
+echo "2. Place your OCI API key (.pem) in: $BASE_DIR/key.pem"
 echo "3. Start service: $SYSTEMCTL_CMD start oci-manager"
 echo "4. Enable on boot: $SYSTEMCTL_CMD enable oci-manager"
 echo "5. Check status: $SYSTEMCTL_CMD status oci-manager"
