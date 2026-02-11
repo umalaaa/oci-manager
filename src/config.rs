@@ -148,8 +148,11 @@ impl OciConfig {
         for (section, props) in map.iter() {
             let name = section.to_string();
 
-            // Skip processing global:web as a profile
-            if name.eq_ignore_ascii_case("global:web") {
+            // Skip processing global sections as profiles
+            if ["global:web", "global:notify", "global:telegram_bot"]
+                .iter()
+                .any(|section| name.eq_ignore_ascii_case(section))
+            {
                 continue;
             }
 
