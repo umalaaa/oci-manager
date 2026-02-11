@@ -42,3 +42,6 @@ ehthumbs.db
 *.bak
 *.tmp
 *.orig
+
+# ── Runtime data (local) ──────────────────────
+/data/

@@ -246,6 +246,17 @@
             <label data-i18n="ssh_key">SSH Public Key</label>
             <input id="sshKey" placeholder="ssh-ed25519 AAAA..." />
           </div>
+          <div>
+            <label data-i18n="root_login">Root Login</label>
+            <div class="inline">
+              <input id="rootLogin" type="checkbox" style="width: auto;" />
+              <span class="muted" data-i18n="root_login_tip">Generate random root password</span>
+            </div>
+            <div class="inline" style="margin-top: 6px;">
+              <input id="useSshKey" type="checkbox" style="width: auto;" onchange="toggleSshKey()" />
+              <span class="muted" data-i18n="use_ssh_key">Use SSH public key</span>
+            </div>
+          </div>
         </div>
         <div style="margin-top: 14px;">
           <label data-i18n="retry_interval">Retry Interval (seconds)</label>
@@ -327,6 +338,9 @@
         image_os: "Image OS / Version",
         display_name: "Display Name",
         ssh_key: "SSH Public Key",
+        use_ssh_key: "Use SSH public key",
+        root_login: "Root Login",
+        root_login_tip: "Generate random root password (required if no SSH key)",
         create_btn: "Create",
         retry_interval: "Retry Interval (seconds)",
         tasks_title: "Tasks",
@@ -390,6 +404,9 @@
         image_os: "镜像系统 / 版本",
         display_name: "实例名称",
         ssh_key: "SSH 公钥",
+        use_ssh_key: "使用 SSH 公钥",
+        root_login: "Root 登录",
+        root_login_tip: "生成随机 Root 密码并通知（未使用 SSH 时必须开启）",
         create_btn: "创建",
         retry_interval: "重试间隔（秒）",
         tasks_title: "任务列表",
@@ -558,6 +575,7 @@
     }
 
     async function createInstance() {
+      const useSshKey = checkedValue("useSshKey");
       const payload = {
         profile: selectedProfile(),
         compartment: value("compartment"),
@@ -571,7 +589,9 @@
         image_os: value("imageOs"),
         image_version: value("imageVersion"),
         display_name: value("displayName"),
-        ssh_key: value("sshKey"),
+        ssh_key: useSshKey ? value("sshKey") : null,
+        use_ssh_key: useSshKey,
+        root_login: checkedValue("rootLogin"),
         retry_interval_secs: numberValue("retryInterval")
       };
 
@@ -981,6 +1001,8 @@
         const d = await defaultsResp.json();
         if (d.compartment) setField('compartment', d.compartment);
         if (d.ssh_public_key) setField('sshKey', d.ssh_public_key);
+        setChecked('useSshKey', !!d.ssh_public_key);
+        toggleSshKey();
         if (d.shape) {
           ensureOption('shape', d.shape, d.shape);
           setField('shape', d.shape);
@@ -997,6 +1019,7 @@
           setField('imageVersion', d.image_version);
         }
         if (d.boot_volume_size_gbs) setField('bootVolumeSize', d.boot_volume_size_gbs);
+        if (d.root_login != null) setChecked('rootLogin', d.root_login);
         if (d.display_name_prefix) {
           const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
           setField('displayName', d.display_name_prefix + '-' + today);
@@ -1131,11 +1154,25 @@
       return input && input.value.trim() ? input.value.trim() : null;
     }
 
+    function checkedValue(id) {
+      const input = document.getElementById(id);
+      return !!(input && input.checked);
+    }
+
     function numberValue(id) {
       const raw = value(id);
       if (!raw) return null;
       const num = Number(raw);
       return Number.isFinite(num) ? num : null;
+    }
+
+    function toggleSshKey() {
+      const useKey = checkedValue('useSshKey');
+      const input = document.getElementById('sshKey');
+      if (input) {
+        input.disabled = !useKey;
+      }
+      validateForm();
     }
 
     function selectedProfile() {
@@ -1211,6 +1248,9 @@
       }
 
       if (preset.ssh_public_key) setField('sshKey', preset.ssh_public_key);
+      setChecked('useSshKey', !!preset.ssh_public_key);
+      toggleSshKey();
+      if (preset.root_login != null) setChecked('rootLogin', preset.root_login);
       if (preset.display_name_prefix) {
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         setField('displayName', preset.display_name_prefix + '-' + today);
@@ -1234,6 +1274,12 @@
       validateForm(); // Re-validate on set
     }
 
+    function setChecked(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.checked = !!val;
+      validateForm();
+    }
+
     function validateForm() {
       const btn = document.getElementById('createBtn');
       if (!btn) return;
@@ -1244,6 +1290,7 @@
       const shape = value('shape');
       const displayName = value('displayName');
       const sshKey = value('sshKey');
+      const useSshKey = checkedValue('useSshKey');
 
       // Image source
       const image = value('image');
@@ -1259,7 +1306,8 @@
         }
       }
 
-      if (compartment && subnet && ad && shape && hasImage && displayName && sshKey && flexValid) {
+      const hasLogin = (!!sshKey && useSshKey) || checkedValue('rootLogin');
+      if (compartment && subnet && ad && shape && hasImage && displayName && hasLogin && flexValid) {
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
@@ -1274,6 +1322,8 @@
     populateImageOs();
     loadPresets();
     loadProfiles();
+    setChecked('useSshKey', true);
+    toggleSshKey();
     setInterval(loadTasks, 5000);
     loadTasks();
   </script>

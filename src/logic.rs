@@ -3,6 +3,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use rand::rngs::OsRng;
+use rand::Rng;
 use serde_json::json;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -26,6 +30,10 @@ pub struct CreateInput {
     pub image_version: Option<String>,
     pub display_name: Option<String>,
     pub ssh_key: Option<String>,
+    #[serde(alias = "useSshKey", alias = "use_ssh_key")]
+    pub use_ssh_key: Option<bool>,
+    #[serde(alias = "rootLogin")]
+    pub root_login: Option<bool>,
     pub retry_interval_secs: Option<u64>,
 }
 
@@ -34,6 +42,7 @@ pub struct ResolvedCreate {
     pub shape: String,
     pub availability_domain: String,
     pub payload: serde_json::Value,
+    pub root_password: Option<String>,
 }
 
 pub async fn resolve_create_payload(
@@ -45,11 +54,23 @@ pub async fn resolve_create_payload(
     let compartment = input
         .compartment
         .or_else(|| defaults.compartment.clone())
-        .ok_or_else(|| anyhow::anyhow!("Missing compartment OCID"))?;
-    let subnet = input
-        .subnet
-        .or_else(|| defaults.subnet.clone())
-        .ok_or_else(|| anyhow::anyhow!("Missing subnet OCID"))?;
+        .unwrap_or_else(|| client.tenancy().to_string());
+    let subnet = match input.subnet.or_else(|| defaults.subnet.clone()) {
+        Some(subnet) => subnet,
+        None => {
+            let subnets = client.list_subnets(&compartment).await?;
+            let subnet = subnets
+                .into_iter()
+                .find(|item| {
+                    matches!(
+                        item.lifecycle_state.as_deref(),
+                        Some("AVAILABLE") | Some("ACTIVE") | None
+                    )
+                })
+                .ok_or_else(|| anyhow::anyhow!("No available subnet found"))?;
+            subnet.id
+        }
+    };
 
     let availability_domain = match input
         .availability_domain
@@ -97,10 +118,15 @@ pub async fn resolve_create_payload(
         format!("{}-{}", prefix, timestamp.replace(':', ""))
     });
 
-    let ssh_key = resolve_ssh_key(
-        input.ssh_key.or_else(|| defaults.ssh_public_key.clone()),
-        allow_ssh_key_file,
-    )?;
+    let use_ssh_key = input.use_ssh_key.unwrap_or(true);
+    let ssh_key = if use_ssh_key {
+        resolve_ssh_key(
+            input.ssh_key.or_else(|| defaults.ssh_public_key.clone()),
+            allow_ssh_key_file,
+        )?
+    } else {
+        None
+    };
 
     let boot_volume_size_gbs = input.boot_volume_size_gbs.or(defaults.boot_volume_size_gbs);
     if let Some(size) = boot_volume_size_gbs {
@@ -111,6 +137,7 @@ pub async fn resolve_create_payload(
 
     let mut ocpus = input.ocpus.or(defaults.ocpus);
     let mut memory_in_gbs = input.memory_in_gbs.or(defaults.memory_in_gbs);
+    let root_login = input.root_login.or(defaults.root_login).unwrap_or(false);
 
     let is_flex = shape.to_uppercase().contains(".FLEX");
 
@@ -181,14 +208,33 @@ pub async fn resolve_create_payload(
         payload["sourceDetails"]["bootVolumeSizeInGBs"] = json!(size);
     }
 
+    let mut root_password = None;
+    let mut user_data = None;
+    if root_login {
+        let password = generate_root_password();
+        user_data = Some(build_root_user_data(&password));
+        root_password = Some(password);
+    }
+
+    let mut metadata = serde_json::Map::new();
     if let Some(key) = ssh_key.as_ref() {
-        payload["metadata"] = json!({ "ssh_authorized_keys": key });
+        metadata.insert("ssh_authorized_keys".to_string(), json!(key));
+    }
+    if let Some(data) = user_data.as_ref() {
+        metadata.insert(
+            "user_data".to_string(),
+            json!(BASE64.encode(data.as_bytes())),
+        );
+    }
+    if !metadata.is_empty() {
+        payload["metadata"] = serde_json::Value::Object(metadata);
     }
 
     Ok(ResolvedCreate {
         shape: payload["shape"].as_str().unwrap().to_string(),
         availability_domain: payload["availabilityDomain"].as_str().unwrap().to_string(),
         payload,
+        root_password,
     })
 }
 
@@ -215,6 +261,37 @@ fn select_latest_image(images: Vec<ImageSummary>) -> Result<String> {
         .last()
         .map(|img| img.id.clone())
         .unwrap_or_else(|| images[0].id.clone()))
+}
+
+const ROOT_PASSWORD_LEN: usize = 20;
+const ROOT_PASSWORD_CHARS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+fn generate_root_password() -> String {
+    let mut rng = OsRng;
+    (0..ROOT_PASSWORD_LEN)
+        .map(|_| {
+            let idx = rng.gen_range(0..ROOT_PASSWORD_CHARS.len());
+            ROOT_PASSWORD_CHARS[idx] as char
+        })
+        .collect()
+}
+
+fn build_root_user_data(password: &str) -> String {
+    format!(
+        r#"#cloud-config
+disable_root: false
+ssh_pwauth: true
+chpasswd:
+  expire: false
+  list: |
+    root:{password}
+runcmd:
+  - sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config || true
+  - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+  - (systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart) || true
+"#,
+        password = password
+    )
 }
 
 fn parse_time(image: &ImageSummary) -> OffsetDateTime {

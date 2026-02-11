@@ -1,5 +1,10 @@
+use std::fs::OpenOptions;
+use std::io::Write;
+
 use anyhow::Result;
 use reqwest::Client;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use tracing::warn;
 
 use crate::config::{NotificationConfig, Profile};
@@ -14,13 +19,24 @@ pub enum NotifySource {
     Task,
 }
 
-pub async fn notify_success(profile: &Profile, instance: &InstanceSummary, source: NotifySource) {
+pub async fn notify_success(
+    profile: &Profile,
+    instance: &InstanceSummary,
+    source: NotifySource,
+    root_password: Option<&str>,
+) {
+    if let Some(password) = root_password {
+        if let Err(err) = record_root_password(profile, instance, source, password) {
+            warn!("Record root password failed: {}", err);
+        }
+    }
+
     let config = &profile.notify;
     if !config.is_configured() {
         return;
     }
 
-    let message = build_message(profile, instance, source);
+    let message = build_message(profile, instance, source, root_password);
     if let Some(bot_token) = config.telegram_bot_token.as_deref() {
         let bound_chat_id = telegram_bind::load_chat_id().map(|id| id.to_string());
         let chat_id = bound_chat_id.or_else(|| config.telegram_chat_id.clone());
@@ -46,14 +62,14 @@ pub async fn notify_success(profile: &Profile, instance: &InstanceSummary, sourc
     }
 }
 
-fn build_message(profile: &Profile, instance: &InstanceSummary, source: NotifySource) -> String {
-    let source_label = match source {
-        NotifySource::Cli => "cli",
-        NotifySource::Cron => "cron",
-        NotifySource::Web => "web",
-        NotifySource::Task => "task",
-    };
-    format!(
+fn build_message(
+    profile: &Profile,
+    instance: &InstanceSummary,
+    source: NotifySource,
+    root_password: Option<&str>,
+) -> String {
+    let source_label = source_label(source);
+    let mut message = format!(
         "OCI instance created ({source}): {name} ({id})\nRegion: {region}\nAD: {ad}\nShape: {shape}",
         source = source_label,
         name = instance.display_name,
@@ -61,7 +77,48 @@ fn build_message(profile: &Profile, instance: &InstanceSummary, source: NotifySo
         region = profile.region,
         ad = instance.availability_domain,
         shape = instance.shape
-    )
+    );
+    if let Some(password) = root_password {
+        message.push_str(&format!("\nRoot password: {}", password));
+    }
+    message
+}
+
+fn record_root_password(
+    profile: &Profile,
+    instance: &InstanceSummary,
+    source: NotifySource,
+    password: &str,
+) -> Result<()> {
+    let timestamp = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "now".to_string());
+    let entry = serde_json::json!({
+        "time": timestamp,
+        "source": source_label(source),
+        "region": profile.region,
+        "availability_domain": instance.availability_domain,
+        "shape": instance.shape,
+        "instance_id": instance.id,
+        "display_name": instance.display_name,
+        "root_password": password,
+    });
+    std::fs::create_dir_all("data")?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("data/root-passwords.log")?;
+    writeln!(file, "{}", entry.to_string())?;
+    Ok(())
+}
+
+fn source_label(source: NotifySource) -> &'static str {
+    match source {
+        NotifySource::Cli => "cli",
+        NotifySource::Cron => "cron",
+        NotifySource::Web => "web",
+        NotifySource::Task => "task",
+    }
 }
 
 async fn send_telegram(bot_token: &str, chat_id: &str, message: &str) -> Result<()> {

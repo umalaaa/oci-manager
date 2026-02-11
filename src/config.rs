@@ -18,6 +18,7 @@ pub struct ProfileDefaults {
     pub boot_volume_size_gbs: Option<u64>,
     pub ocpus: Option<f64>,
     pub memory_in_gbs: Option<f64>,
+    pub root_login: Option<bool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -35,6 +36,7 @@ pub struct Preset {
     pub boot_volume_size_gbs: Option<u64>,
     pub ocpus: Option<f64>,
     pub memory_in_gbs: Option<f64>,
+    pub root_login: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -221,6 +223,7 @@ impl Preset {
             boot_volume_size_gbs: optional_u64(props, "boot_volume_size_gbs")?,
             ocpus: optional_f64(props, "ocpus")?,
             memory_in_gbs: optional_f64(props, "memory_in_gbs")?,
+            root_login: optional_bool(props, "root_login")?,
         })
     }
 }
@@ -250,6 +253,7 @@ impl Profile {
             boot_volume_size_gbs: optional_u64(props, "boot_volume_size_gbs")?,
             ocpus: optional_f64(props, "ocpus")?,
             memory_in_gbs: optional_f64(props, "memory_in_gbs")?,
+            root_login: optional_bool(props, "root_login")?,
         };
 
         let notify = NotificationConfig::from_props(props)?;

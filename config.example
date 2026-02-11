@@ -58,6 +58,7 @@ key_file=/path/to/your/oci_api_key.pem
 # shape=VM.Standard.E4.Flex
 # availability_domain=Uocm:PHX-AD-1
 # ssh_public_key=/path/to/your/id_rsa.pub
+# root_login=true
 # display_name_prefix=auto
 # boot_volume_size_gbs=50
 

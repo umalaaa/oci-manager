@@ -68,6 +68,10 @@ pub struct InstanceCreateArgs {
     pub display_name: Option<String>,
     #[arg(long = "ssh-key")]
     pub ssh_key: Option<String>,
+    #[arg(long, conflicts_with = "no_root_login")]
+    pub root_login: bool,
+    #[arg(long, conflicts_with = "root_login")]
+    pub no_root_login: bool,
     #[arg(long)]
     pub retry: bool,
     #[arg(long)]
@@ -136,6 +140,10 @@ pub struct CronArgs {
     pub display_name: Option<String>,
     #[arg(long = "ssh-key")]
     pub ssh_key: Option<String>,
+    #[arg(long, conflicts_with = "no_root_login")]
+    pub root_login: bool,
+    #[arg(long, conflicts_with = "root_login")]
+    pub no_root_login: bool,
     /// Preset name from config (e.g. ARM-1cpu-6gb-Ubuntu)
     #[arg(long)]
     pub preset: Option<String>,

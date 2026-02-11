@@ -143,6 +143,13 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
             let retry_enabled =
                 args.retry || args.retry_seconds.is_some() || args.retry_max.is_some();
             let retry_seconds = args.retry_seconds.unwrap_or(180);
+            let root_login = if args.root_login {
+                Some(true)
+            } else if args.no_root_login {
+                Some(false)
+            } else {
+                None
+            };
             let mut attempt: u32 = 0;
             loop {
                 attempt += 1;
@@ -160,6 +167,8 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
                     image_version: args.image_version.clone(),
                     display_name: args.display_name.clone(),
                     ssh_key: args.ssh_key.clone(),
+                    use_ssh_key: None,
+                    root_login,
                     retry_interval_secs: None,
                 };
                 let resolved =
@@ -174,7 +183,13 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
                             "Instance created: {} ({})",
                             instance.display_name, instance.id
                         );
-                        notify_success(&client.profile, &instance, NotifySource::Cli).await;
+                        notify_success(
+                            &client.profile,
+                            &instance,
+                            NotifySource::Cli,
+                            resolved.root_password.as_deref(),
+                        )
+                        .await;
                         break;
                     }
                     Err(err) => {
@@ -254,6 +269,13 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
     };
 
     let mut attempt: u32 = 0;
+    let root_login = if args.root_login {
+        Some(true)
+    } else if args.no_root_login {
+        Some(false)
+    } else {
+        preset.and_then(|p| p.root_login)
+    };
     loop {
         attempt += 1;
         let input = CreateInput {
@@ -307,6 +329,8 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
                 .ssh_key
                 .clone()
                 .or_else(|| preset.and_then(|p| p.ssh_public_key.clone())),
+            use_ssh_key: None,
+            root_login,
             retry_interval_secs: None,
         };
 
@@ -322,7 +346,13 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
                     "[cron] Instance created: {} ({})",
                     instance.display_name, instance.id
                 );
-                notify_success(&client.profile, &instance, NotifySource::Cron).await;
+                notify_success(
+                    &client.profile,
+                    &instance,
+                    NotifySource::Cron,
+                    resolved.root_password.as_deref(),
+                )
+                .await;
                 return Ok(());
             }
             Err(err) => {
