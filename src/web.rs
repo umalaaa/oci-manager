@@ -776,7 +776,11 @@ async fn telegram_poll_loop(state: TelegramBotState) {
                 for update in updates {
                     offset = update.update_id + 1;
                     if let Some(message) = update.message {
-                        handle_telegram_message(&state, &client, message).await;
+                        let state_clone = state.clone();
+                        let client_clone = client.clone();
+                        tokio::spawn(async move {
+                            handle_telegram_message(&state_clone, &client_clone, message).await;
+                        });
                     }
                 }
             }
@@ -790,10 +794,7 @@ async fn telegram_poll_loop(state: TelegramBotState) {
 
 async fn fetch_updates(client: &Client, token: &str, offset: i64) -> Result<Vec<TelegramUpdate>> {
     let url = format!("https://api.telegram.org/bot{}/getUpdates", token);
-    let query = TelegramUpdateQuery {
-        timeout: 30,
-        offset,
-    };
+    let query = TelegramUpdateQuery { timeout: 5, offset };
     let response = client.get(url).query(&query).send().await?;
     if !response.status().is_success() {
         let status = response.status();
