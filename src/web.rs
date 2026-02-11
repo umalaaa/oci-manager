@@ -3174,7 +3174,12 @@ fn apply_chat_defaults(state: &TelegramBotState, chat_id: i64, input: &mut Creat
 
 fn ensure_login_method(input: &CreateInput) -> Result<(), String> {
     let ssh_enabled = input.use_ssh_key.unwrap_or(true);
-    let has_ssh = ssh_enabled && input.ssh_key.as_ref().map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let has_ssh = ssh_enabled
+        && input
+            .ssh_key
+            .as_ref()
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false);
     let has_root = input.root_login.unwrap_or(false);
     if has_ssh || has_root {
         Ok(())
