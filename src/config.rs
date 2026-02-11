@@ -37,6 +37,49 @@ pub struct Preset {
     pub memory_in_gbs: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct NotificationConfig {
+    pub telegram_bot_token: Option<String>,
+    pub telegram_chat_id: Option<String>,
+    pub discord_webhook_url: Option<String>,
+    pub email_smtp_host: Option<String>,
+    pub email_smtp_port: Option<u16>,
+    pub email_username: Option<String>,
+    pub email_password: Option<String>,
+    pub email_from: Option<String>,
+    pub email_to: Option<String>,
+    pub email_use_tls: Option<bool>,
+    pub email_subject_prefix: Option<String>,
+}
+
+impl NotificationConfig {
+    fn from_props(props: &std::collections::HashMap<String, Option<String>>) -> Result<Self> {
+        Ok(Self {
+            telegram_bot_token: optional(props, "telegram_bot_token"),
+            telegram_chat_id: optional(props, "telegram_chat_id"),
+            discord_webhook_url: optional(props, "discord_webhook_url"),
+            email_smtp_host: optional(props, "email_smtp_host"),
+            email_smtp_port: optional_u64(props, "email_smtp_port")?.map(|v| v as u16),
+            email_username: optional(props, "email_username"),
+            email_password: optional(props, "email_password"),
+            email_from: optional(props, "email_from"),
+            email_to: optional(props, "email_to"),
+            email_use_tls: optional_bool(props, "email_use_tls")?,
+            email_subject_prefix: optional(props, "email_subject_prefix"),
+        })
+    }
+
+    pub fn is_configured(&self) -> bool {
+        self.telegram_bot_token.is_some()
+            || self.discord_webhook_url.is_some()
+            || self.email_configured()
+    }
+
+    pub fn email_configured(&self) -> bool {
+        self.email_smtp_host.is_some() && self.email_from.is_some() && self.email_to.is_some()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub user: String,
@@ -45,6 +88,7 @@ pub struct Profile {
     pub region: String,
     pub key_file: PathBuf,
     pub defaults: ProfileDefaults,
+    pub notify: NotificationConfig,
     pub admin_key: Option<String>,
     pub port: Option<u16>,
     pub enable_admin: bool,
@@ -88,14 +132,16 @@ impl OciConfig {
             }
         }
 
-        // 2. Merge properties from [global:web]
-        if let Some(global_web_map) = map
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case("global:web"))
-            .map(|(_, v)| v.clone())
-        {
-            for (k, v) in global_web_map {
-                global_props.insert(k, v);
+        // 2. Merge properties from [global:web] and [global:notify]
+        for section_name in ["global:web", "global:notify"] {
+            if let Some(section_map) = map
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(section_name))
+                .map(|(_, v)| v.clone())
+            {
+                for (k, v) in section_map {
+                    global_props.insert(k, v);
+                }
             }
         }
 
@@ -203,6 +249,7 @@ impl Profile {
             memory_in_gbs: optional_f64(props, "memory_in_gbs")?,
         };
 
+        let notify = NotificationConfig::from_props(props)?;
         let admin_key = optional(props, "admin_key");
         let port = optional_u64(props, "port")?.map(|v| v as u16);
         let enable_admin = props
@@ -218,6 +265,7 @@ impl Profile {
             region,
             key_file,
             defaults,
+            notify,
             admin_key,
             port,
             enable_admin,
@@ -263,6 +311,21 @@ fn optional_u64(
         .parse::<u64>()
         .with_context(|| format!("Invalid integer for '{}': {}", key, raw))?;
     Ok(Some(parsed))
+}
+
+fn optional_bool(
+    props: &std::collections::HashMap<String, Option<String>>,
+    key: &str,
+) -> Result<Option<bool>> {
+    let Some(raw) = optional(props, key) else {
+        return Ok(None);
+    };
+    let value = raw.to_lowercase();
+    match value.as_str() {
+        "true" | "1" | "yes" | "on" => Ok(Some(true)),
+        "false" | "0" | "no" | "off" => Ok(Some(false)),
+        _ => Err(anyhow::anyhow!("Invalid boolean for '{}': {}", key, raw)),
+    }
 }
 
 fn optional_f64(
@@ -361,5 +424,40 @@ admin_key=secret
         assert!(profile.key_file.ends_with("oci.pem"));
         assert_eq!(profile.admin_key.as_deref(), Some("secret"));
         assert!(profile.enable_admin);
+    }
+
+    #[test]
+    fn load_notification_config() {
+        let temp_dir = std::env::temp_dir().join("oci_manager_test_notify");
+        let _ = fs::create_dir_all(&temp_dir);
+        let config_path = temp_dir.join("config");
+        let content = r#"
+[global:notify]
+telegram_bot_token=bot-token
+telegram_chat_id=12345
+discord_webhook_url=https://discord.com/api/webhooks/test
+email_smtp_host=smtp.example.com
+email_smtp_port=587
+email_from=oci@example.com
+email_to=ops@example.com
+email_use_tls=true
+
+[DEFAULT]
+user=ocid1.user.oc1..example
+fingerprint=aa:bb:cc
+tenancy=ocid1.tenancy.oc1..example
+region=us-ashburn-1
+key_file=oci.pem
+        "#;
+        fs::write(&config_path, content).expect("write config");
+        let cfg = OciConfig::load(Some(config_path)).expect("load");
+        let profile = cfg.profile(Some("DEFAULT")).expect("profile");
+        assert_eq!(
+            profile.notify.telegram_bot_token.as_deref(),
+            Some("bot-token")
+        );
+        assert_eq!(profile.notify.telegram_chat_id.as_deref(), Some("12345"));
+        assert!(profile.notify.email_configured());
+        assert_eq!(profile.notify.email_use_tls, Some(true));
     }
 }

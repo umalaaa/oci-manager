@@ -18,6 +18,7 @@ use tracing::info;
 use crate::config::{OciConfig, Preset, ProfileDefaults};
 use crate::logic::{resolve_create_payload, CreateInput};
 use crate::models::{AvailabilityDomain, InstanceSummary, Shape, SubnetSummary};
+use crate::notify::{notify_success, NotifySource};
 use crate::oci::OciClient;
 
 #[derive(Clone, Serialize)]
@@ -399,6 +400,7 @@ async fn create_instance(
         .create_instance(resolved.payload)
         .await
         .map_err(internal_error)?;
+    notify_success(&profile.client.profile, &instance, NotifySource::Web).await;
     Ok(Json(instance))
 }
 
@@ -690,5 +692,11 @@ async fn execute_creation(state: &AppState, input: CreateInput) -> Result<Instan
         .client
         .create_instance(payload.payload)
         .await?;
+    notify_success(
+        &profile_state.client.profile,
+        &instance,
+        NotifySource::Task,
+    )
+    .await;
     Ok(instance)
 }

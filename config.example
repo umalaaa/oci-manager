@@ -20,6 +20,23 @@ admin_key=change-me-to-a-strong-random-key
 port=9927
 # ssh_public_key=ssh-rsa ... (optional global default)
 
+# ── Notifications (optional) ────────────────────────────────────
+# You can place these settings at the top level, or under [global:notify].
+# They apply to all profiles unless overridden in a profile section.
+
+[global:notify]
+# telegram_bot_token=123456:ABCDEF
+# telegram_chat_id=123456789
+# discord_webhook_url=https://discord.com/api/webhooks/xxx/yyy
+# email_smtp_host=smtp.example.com
+# email_smtp_port=587
+# email_username=your_user
+# email_password=your_password
+# email_from=oci-manager@example.com
+# email_to=you@example.com,ops@example.com
+# email_use_tls=true
+# email_subject_prefix=OCI
+
 # ── Default Profile ──────────────────────────────────────────────
 [DEFAULT]
 # ── Required ────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod logic;
 mod models;
+mod notify;
 mod oci;
 mod web;
 
@@ -13,6 +14,7 @@ use tracing_subscriber::EnvFilter;
 use crate::cli::{AvailabilityArgs, Command, CronArgs, InstanceCommand};
 use crate::config::OciConfig;
 use crate::logic::{resolve_create_payload, CreateInput};
+use crate::notify::{notify_success, NotifySource};
 use crate::oci::OciClient;
 
 #[tokio::main]
@@ -171,6 +173,7 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
                             "Instance created: {} ({})",
                             instance.display_name, instance.id
                         );
+                        notify_success(&client.profile, &instance, NotifySource::Cli).await;
                         break;
                     }
                     Err(err) => {
@@ -318,6 +321,7 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
                     "[cron] Instance created: {} ({})",
                     instance.display_name, instance.id
                 );
+                notify_success(&client.profile, &instance, NotifySource::Cron).await;
                 return Ok(());
             }
             Err(err) => {

@@ -79,6 +79,20 @@ admin_key=change-me-to-a-strong-random-key
 port=9927
 # ssh_public_key=ssh-ed25519 AAAA...         # (optional) global default SSH key
 
+# ── Notifications (optional) ───────────────
+[global:notify]
+# telegram_bot_token=123456:ABCDEF
+# telegram_chat_id=123456789
+# discord_webhook_url=https://discord.com/api/webhooks/xxx/yyy
+# email_smtp_host=smtp.example.com
+# email_smtp_port=587
+# email_username=your_user
+# email_password=your_password
+# email_from=oci-manager@example.com
+# email_to=you@example.com,ops@example.com
+# email_use_tls=true
+# email_subject_prefix=OCI
+
 # ── Default OCI Profile (required fields) ──
 [DEFAULT]
 user=ocid1.user.oc1..aaaaaaaaexample
@@ -130,6 +144,24 @@ Web server settings go here. This section is **not** an OCI profile — no crede
 > **Tip:** These settings can also be placed at the **top level** of the config (before any `[section]`).
 
 **Web-only mode:** If you only include `[global:web]` without any OCI profile, the web server will still start. OCI operations will fail until a profile is added.
+
+### `[global:notify]` — Success Notifications
+
+Configure optional notifications when an instance is created successfully. These settings can also be placed at the top level and can be overridden per profile.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `telegram_bot_token` | | Telegram bot token |
+| `telegram_chat_id` | | Chat ID to receive messages |
+| `discord_webhook_url` | | Discord webhook URL |
+| `email_smtp_host` | | SMTP host |
+| `email_smtp_port` | | SMTP port (default: 587) |
+| `email_username` | | SMTP username (optional) |
+| `email_password` | | SMTP password (optional) |
+| `email_from` | | Email sender address |
+| `email_to` | | Email recipients (comma/semicolon separated) |
+| `email_use_tls` | | Use TLS/STARTTLS (default: true) |
+| `email_subject_prefix` | | Subject prefix (default: `OCI`) |
 
 ### `[DEFAULT]` / `[NAME]` — OCI Profiles
 
