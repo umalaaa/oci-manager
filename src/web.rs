@@ -12,14 +12,16 @@ use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::config::{OciConfig, Preset, ProfileDefaults};
+use crate::config::{NotificationConfig, OciConfig, Preset, ProfileDefaults};
 use crate::logic::{resolve_create_payload, CreateInput};
 use crate::models::{AvailabilityDomain, InstanceSummary, Shape, SubnetSummary};
 use crate::notify::{notify_success, NotifySource};
 use crate::oci::OciClient;
+use crate::telegram_bind;
 
 #[derive(Clone, Serialize)]
 #[allow(dead_code)]
@@ -80,6 +82,14 @@ struct ProfileState {
     defaults: ProfileDefaults,
 }
 
+#[derive(Clone)]
+struct TelegramBotState {
+    app: AppState,
+    token: String,
+    bind_state: Arc<Mutex<telegram_bind::TelegramBindState>>,
+    chat_profiles: Arc<Mutex<HashMap<i64, String>>>,
+}
+
 pub async fn serve(
     config: OciConfig,
     default_profile: String,
@@ -87,6 +97,7 @@ pub async fn serve(
     host: String,
     port: u16,
 ) -> Result<()> {
+    let global_notify = NotificationConfig::from_props(&config.global_props)?;
     let mut profiles = HashMap::new();
     for (name, profile) in config.profiles.into_iter() {
         let client = OciClient::new(profile.clone())?;
@@ -112,6 +123,8 @@ pub async fn serve(
         presets: Arc::new(config.presets),
         tasks: Arc::new(Mutex::new(Vec::new())),
     };
+
+    start_telegram_bot_if_configured(state.clone(), &global_notify);
 
     let app = Router::new()
         .route("/", get(index))
@@ -504,6 +517,48 @@ async fn queue_instance(
     State(state): State<AppState>,
     Json(input): Json<CreateInput>,
 ) -> impl IntoResponse {
+    let id = enqueue_task(&state, input);
+    Json(serde_json::json!({ "taskId": id }))
+}
+
+async fn delete_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    remove_task(&state, &id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(|err| (StatusCode::NOT_FOUND, err))
+}
+
+async fn clear_tasks(State(state): State<AppState>) -> impl IntoResponse {
+    clear_tasks_internal(&state);
+    StatusCode::NO_CONTENT
+}
+
+fn remove_task(state: &AppState, id: &str) -> Result<(), String> {
+    let mut tasks = state.tasks.lock().unwrap();
+    if let Some(pos) = tasks.iter().position(|t| t.id == id) {
+        let task = &tasks[pos];
+        task.cancelled.store(true, Ordering::Relaxed);
+        tasks.remove(pos);
+        Ok(())
+    } else {
+        Err(format!("Task '{}' not found", id))
+    }
+}
+
+fn clear_tasks_internal(state: &AppState) {
+    let mut tasks = state.tasks.lock().unwrap();
+    tasks.retain(|t| {
+        let active = matches!(
+            t.status,
+            TaskStatus::Pending | TaskStatus::Running | TaskStatus::Retrying(_)
+        );
+        active && !t.cancelled.load(Ordering::Relaxed)
+    });
+}
+
+fn enqueue_task(state: &AppState, input: CreateInput) -> String {
     let id = format!(
         "task-{}",
         SystemTime::now()
@@ -541,7 +596,7 @@ async fn queue_instance(
 
     {
         let mut tasks = state.tasks.lock().unwrap();
-        tasks.push(task.clone());
+        tasks.push(task);
     }
 
     let state_clone = state.clone();
@@ -552,7 +607,6 @@ async fn queue_instance(
         let mut attempts = 0;
         let retry_interval: u64 = input_clone.retry_interval_secs.unwrap_or(60).max(10);
         loop {
-            // Check cancellation before each attempt
             if cancelled.load(Ordering::Relaxed) {
                 update_task_status(
                     &state_clone,
@@ -606,7 +660,6 @@ async fn queue_instance(
                         Some(err_msg),
                         Some(next_at),
                     );
-                    // Sleep in 1s increments so cancellation is responsive
                     for _ in 0..retry_interval {
                         if cancelled.load(Ordering::Relaxed) {
                             update_task_status(
@@ -626,34 +679,7 @@ async fn queue_instance(
         }
     });
 
-    Json(serde_json::json!({ "taskId": id }))
-}
-
-async fn delete_task(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    let mut tasks = state.tasks.lock().unwrap();
-    if let Some(pos) = tasks.iter().position(|t| t.id == id) {
-        let task = &tasks[pos];
-        task.cancelled.store(true, Ordering::Relaxed);
-        tasks.remove(pos);
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err((StatusCode::NOT_FOUND, format!("Task '{}' not found", id)))
-    }
-}
-
-async fn clear_tasks(State(state): State<AppState>) -> impl IntoResponse {
-    let mut tasks = state.tasks.lock().unwrap();
-    tasks.retain(|t| {
-        let active = matches!(
-            t.status,
-            TaskStatus::Pending | TaskStatus::Running | TaskStatus::Retrying(_)
-        );
-        active && !t.cancelled.load(Ordering::Relaxed)
-    });
-    StatusCode::NO_CONTENT
+    id
 }
 
 fn update_task_status(
@@ -692,11 +718,556 @@ async fn execute_creation(state: &AppState, input: CreateInput) -> Result<Instan
         .client
         .create_instance(payload.payload)
         .await?;
-    notify_success(
-        &profile_state.client.profile,
-        &instance,
-        NotifySource::Task,
-    )
-    .await;
+    notify_success(&profile_state.client.profile, &instance, NotifySource::Task).await;
     Ok(instance)
+}
+
+fn start_telegram_bot_if_configured(state: AppState, notify: &NotificationConfig) {
+    let Some(token) = notify.telegram_bot_token.clone() else {
+        return;
+    };
+    let bind_state = telegram_bind::load_state();
+    let bot_state = TelegramBotState {
+        app: state,
+        token,
+        bind_state: Arc::new(Mutex::new(bind_state)),
+        chat_profiles: Arc::new(Mutex::new(HashMap::new())),
+    };
+    tokio::spawn(async move {
+        telegram_poll_loop(bot_state).await;
+    });
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramUpdateResponse {
+    ok: bool,
+    result: Vec<TelegramUpdate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramUpdate {
+    update_id: i64,
+    message: Option<TelegramMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramMessage {
+    chat: TelegramChat,
+    text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramChat {
+    id: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct TelegramUpdateQuery {
+    timeout: u64,
+    offset: i64,
+}
+
+async fn telegram_poll_loop(state: TelegramBotState) {
+    let client = Client::new();
+    let mut offset: i64 = 0;
+    loop {
+        match fetch_updates(&client, &state.token, offset).await {
+            Ok(updates) => {
+                for update in updates {
+                    offset = update.update_id + 1;
+                    if let Some(message) = update.message {
+                        handle_telegram_message(&state, &client, message).await;
+                    }
+                }
+            }
+            Err(err) => {
+                warn!("Telegram polling failed: {}", err);
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
+async fn fetch_updates(client: &Client, token: &str, offset: i64) -> Result<Vec<TelegramUpdate>> {
+    let url = format!("https://api.telegram.org/bot{}/getUpdates", token);
+    let query = TelegramUpdateQuery {
+        timeout: 30,
+        offset,
+    };
+    let response = client.get(url).query(&query).send().await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!(
+            "telegram getUpdates error {}: {}",
+            status,
+            body
+        ));
+    }
+    let payload = response.json::<TelegramUpdateResponse>().await?;
+    if !payload.ok {
+        return Err(anyhow::anyhow!("telegram getUpdates returned ok=false"));
+    }
+    Ok(payload.result)
+}
+
+async fn handle_telegram_message(
+    state: &TelegramBotState,
+    client: &Client,
+    message: TelegramMessage,
+) {
+    let Some(text) = message.text else {
+        return;
+    };
+    let Some((command, args)) = parse_command(&text) else {
+        return;
+    };
+    let chat_id = message.chat.id;
+
+    let is_blocked = {
+        let bind_state = state.bind_state.lock().unwrap();
+        telegram_bind::is_blocked(&bind_state, chat_id)
+    };
+    if is_blocked {
+        let _ = send_bot_message(client, &state.token, chat_id, "Blocked.").await;
+        return;
+    }
+
+    let response = match command.as_str() {
+        "start" | "help" => Ok(help_text()),
+        "bind" => handle_bind_command(state, chat_id, &args),
+        _ => {
+            if !is_authorized(state, chat_id) {
+                let (count, blocked) = {
+                    let mut bind_state = state.bind_state.lock().unwrap();
+                    telegram_bind::record_failure(&mut bind_state, chat_id).unwrap_or((3, true))
+                };
+                if blocked {
+                    Ok("Unauthorized. You are blocked after 3 failures.".to_string())
+                } else {
+                    Ok(format!(
+                        "Unauthorized. Attempt {}/3. Use /bind <admin_key>.",
+                        count
+                    ))
+                }
+            } else {
+                handle_authed_command(state, chat_id, &command, &args).await
+            }
+        }
+    };
+
+    let text = match response {
+        Ok(value) => value,
+        Err(value) => value,
+    };
+    let _ = send_bot_message(client, &state.token, chat_id, &text).await;
+}
+
+fn parse_command(text: &str) -> Option<(String, Vec<String>)> {
+    let trimmed = text.trim();
+    if !trimmed.starts_with('/') {
+        return None;
+    }
+    let mut parts = trimmed.split_whitespace();
+    let raw = parts.next()?.trim_start_matches('/');
+    let cmd = raw.split('@').next().unwrap_or(raw).to_lowercase();
+    let args = parts.map(|item| item.to_string()).collect::<Vec<_>>();
+    Some((cmd, args))
+}
+
+fn help_text() -> String {
+    [
+        "Commands:",
+        "/bind <admin_key>",
+        "/profile list | /profile set <NAME> | /profile",
+        "/instances [profile=NAME] [compartment=OCID]",
+        "/availability [profile=NAME] [compartment=OCID] [availability_domain=AD]",
+        "/create key=value ...",
+        "/queue key=value ...",
+        "/tasks | /tasks clear",
+        "/task stop <TASK_ID>",
+        "",
+        "Create/Queue keys:",
+        "compartment, subnet, shape, ocpus, memory_gbs, boot_volume_gbs,",
+        "availability_domain, image, image_os, image_version, display_name,",
+        "ssh_key, retry_interval_secs, profile",
+    ]
+    .join("\n")
+}
+
+fn is_authorized(state: &TelegramBotState, chat_id: i64) -> bool {
+    let bind_state = state.bind_state.lock().unwrap();
+    bind_state.chat_id == Some(chat_id)
+}
+
+fn handle_bind_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    let Some(admin_key) = state.app.admin_key.clone() else {
+        return Err("Admin key is not configured.".to_string());
+    };
+    let provided = args.first().map(|v| v.trim()).unwrap_or("");
+    if provided.is_empty() {
+        return Err("Usage: /bind <admin_key>".to_string());
+    }
+    if provided != admin_key {
+        let (count, blocked) = {
+            let mut bind_state = state.bind_state.lock().unwrap();
+            telegram_bind::record_failure(&mut bind_state, chat_id).unwrap_or((3, true))
+        };
+        if blocked {
+            return Ok("Unauthorized. You are blocked after 3 failures.".to_string());
+        }
+        return Ok(format!("Unauthorized. Attempt {}/3.", count));
+    }
+
+    let mut bind_state = state.bind_state.lock().unwrap();
+    if let Err(err) = telegram_bind::set_chat_id(&mut bind_state, chat_id) {
+        return Err(format!("Bind failed: {}", err));
+    }
+    Ok("Bind success. This chat is now authorized.".to_string())
+}
+
+async fn handle_authed_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    command: &str,
+    args: &[String],
+) -> Result<String, String> {
+    match command {
+        "profile" => handle_profile_command(state, chat_id, args),
+        "instances" => handle_instances_command(state, chat_id, args).await,
+        "availability" => handle_availability_command(state, chat_id, args).await,
+        "create" => handle_create_command(state, chat_id, args).await,
+        "queue" => handle_queue_command(state, chat_id, args),
+        "tasks" => handle_tasks_command(state, chat_id, args),
+        "task" => handle_task_command(state, chat_id, args),
+        _ => Err("Unknown command. Use /help.".to_string()),
+    }
+}
+
+fn handle_profile_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    if args.is_empty() {
+        let current = get_chat_profile(state, chat_id);
+        return Ok(format!("Current profile: {}", current));
+    }
+    if args[0].eq_ignore_ascii_case("list") {
+        let mut profiles = state.app.profiles.keys().cloned().collect::<Vec<_>>();
+        profiles.sort();
+        return Ok(format!("Profiles:\n{}", profiles.join("\n")));
+    }
+    if args[0].eq_ignore_ascii_case("set") {
+        let Some(name) = args.get(1) else {
+            return Err("Usage: /profile set <NAME>".to_string());
+        };
+        let key = name.trim().to_uppercase();
+        if !state.app.profiles.contains_key(&key) {
+            return Err(format!("Profile '{}' not found.", key));
+        }
+        let mut profiles = state.chat_profiles.lock().unwrap();
+        profiles.insert(chat_id, key.clone());
+        return Ok(format!("Profile set to {}.", key));
+    }
+    Err("Usage: /profile list | /profile set <NAME> | /profile".to_string())
+}
+
+async fn handle_instances_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    let params = parse_kv_args(args)?;
+    let profile_key = resolve_profile_key(state, chat_id, params.get("profile"));
+    let Some(profile_state) = state.app.profiles.get(&profile_key) else {
+        return Err(format!("Profile '{}' not found.", profile_key));
+    };
+    let compartment = params
+        .get("compartment")
+        .cloned()
+        .or_else(|| profile_state.defaults.compartment.clone())
+        .ok_or_else(|| "Missing compartment".to_string())?;
+    let instances = profile_state
+        .client
+        .list_instances(&compartment)
+        .await
+        .map_err(|err| err.to_string())?;
+    if instances.is_empty() {
+        return Ok("No instances found.".to_string());
+    }
+    let mut lines = Vec::new();
+    for (idx, inst) in instances.iter().enumerate() {
+        if idx >= 20 {
+            lines.push("...truncated...".to_string());
+            break;
+        }
+        lines.push(format!(
+            "{} | {} | {} | {}",
+            inst.id, inst.display_name, inst.lifecycle_state, inst.shape
+        ));
+    }
+    Ok(lines.join("\n"))
+}
+
+async fn handle_availability_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    let params = parse_kv_args(args)?;
+    let profile_key = resolve_profile_key(state, chat_id, params.get("profile"));
+    let Some(profile_state) = state.app.profiles.get(&profile_key) else {
+        return Err(format!("Profile '{}' not found.", profile_key));
+    };
+    let compartment = params
+        .get("compartment")
+        .cloned()
+        .or_else(|| profile_state.defaults.compartment.clone())
+        .ok_or_else(|| "Missing compartment".to_string())?;
+    let ads = profile_state
+        .client
+        .availability_domains(&compartment)
+        .await
+        .map_err(|err| err.to_string())?;
+    let mut lines = vec!["Availability Domains:".to_string()];
+    for ad in &ads {
+        lines.push(format!("{} ({})", ad.name, ad.id));
+    }
+    if let Some(ad) = params
+        .get("availability_domain")
+        .cloned()
+        .or_else(|| profile_state.defaults.availability_domain.clone())
+    {
+        let shapes = profile_state
+            .client
+            .list_shapes(&compartment, &ad)
+            .await
+            .map_err(|err| err.to_string())?;
+        lines.push(format!("Shapes in {}:", ad));
+        for (idx, shape) in shapes.iter().enumerate() {
+            if idx >= 20 {
+                lines.push("...truncated...".to_string());
+                break;
+            }
+            let ocpus = shape.ocpus.unwrap_or_default();
+            let mem = shape.memory_in_gbs.unwrap_or_default();
+            lines.push(format!("{} - {} OCPUs / {} GB", shape.shape, ocpus, mem));
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+async fn handle_create_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    let params = parse_kv_args(args)?;
+    let profile_key = resolve_profile_key(state, chat_id, params.get("profile"));
+    let input = build_create_input(&params, Some(profile_key.clone()))?;
+    let instance = execute_creation(&state.app, input)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(format!(
+        "Instance created: {} ({})",
+        instance.display_name, instance.id
+    ))
+}
+
+fn handle_queue_command(
+    state: &TelegramBotState,
+    chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    let params = parse_kv_args(args)?;
+    let profile_key = resolve_profile_key(state, chat_id, params.get("profile"));
+    let input = build_create_input(&params, Some(profile_key.clone()))?;
+    let id = enqueue_task(&state.app, input);
+    Ok(format!("Task queued: {}", id))
+}
+
+fn handle_tasks_command(
+    state: &TelegramBotState,
+    _chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    if args.first().map(|v| v.as_str()) == Some("clear") {
+        clear_tasks_internal(&state.app);
+        return Ok("Tasks cleared.".to_string());
+    }
+    let tasks = state.app.tasks.lock().unwrap();
+    if tasks.is_empty() {
+        return Ok("No tasks.".to_string());
+    }
+    let mut lines = Vec::new();
+    for (idx, task) in tasks.iter().enumerate() {
+        if idx >= 20 {
+            lines.push("...truncated...".to_string());
+            break;
+        }
+        lines.push(format!(
+            "{} | {} | {}",
+            task.id,
+            task.description,
+            task_status_label(&task.status)
+        ));
+    }
+    Ok(lines.join("\n"))
+}
+
+fn handle_task_command(
+    state: &TelegramBotState,
+    _chat_id: i64,
+    args: &[String],
+) -> Result<String, String> {
+    if args.first().map(|v| v.as_str()) != Some("stop") {
+        return Err("Usage: /task stop <TASK_ID>".to_string());
+    }
+    let Some(task_id) = args.get(1) else {
+        return Err("Usage: /task stop <TASK_ID>".to_string());
+    };
+    remove_task(&state.app, task_id)
+        .map(|_| format!("Task {} stopped.", task_id))
+        .map_err(|err| err.to_string())
+}
+
+fn task_status_label(status: &TaskStatus) -> String {
+    match status {
+        TaskStatus::Pending => "pending".to_string(),
+        TaskStatus::Running => "running".to_string(),
+        TaskStatus::Success(msg) => format!("success ({})", msg),
+        TaskStatus::Failed(msg) => format!("failed ({})", msg),
+        TaskStatus::Retrying(msg) => format!("retrying ({})", msg),
+        TaskStatus::Cancelled => "cancelled".to_string(),
+    }
+}
+
+fn get_chat_profile(state: &TelegramBotState, chat_id: i64) -> String {
+    let profiles = state.chat_profiles.lock().unwrap();
+    profiles
+        .get(&chat_id)
+        .cloned()
+        .unwrap_or_else(|| state.app.default_profile.clone())
+}
+
+fn resolve_profile_key(
+    state: &TelegramBotState,
+    chat_id: i64,
+    override_name: Option<&String>,
+) -> String {
+    if let Some(name) = override_name {
+        return name.trim().to_uppercase();
+    }
+    get_chat_profile(state, chat_id)
+}
+
+fn parse_kv_args(args: &[String]) -> Result<HashMap<String, String>, String> {
+    let mut map = HashMap::new();
+    for arg in args {
+        let Some((key, value)) = arg.split_once('=') else {
+            return Err(format!("Invalid arg '{}', expected key=value", arg));
+        };
+        map.insert(key.trim().to_lowercase(), value.trim().to_string());
+    }
+    Ok(map)
+}
+
+fn parse_f64(value: &str, key: &str) -> Result<f64, String> {
+    value
+        .parse::<f64>()
+        .map_err(|_| format!("Invalid number for {}", key))
+}
+
+fn parse_u64(value: &str, key: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| format!("Invalid number for {}", key))
+}
+
+fn build_create_input(
+    params: &HashMap<String, String>,
+    profile: Option<String>,
+) -> Result<CreateInput, String> {
+    let ocpus = params
+        .get("ocpus")
+        .map(|value| parse_f64(value, "ocpus"))
+        .transpose()?;
+    let memory_in_gbs = params
+        .get("memory_gbs")
+        .or_else(|| params.get("memory_in_gbs"))
+        .map(|value| parse_f64(value, "memory_gbs"))
+        .transpose()?;
+    let boot_volume_size_gbs = params
+        .get("boot_volume_gbs")
+        .or_else(|| params.get("boot_volume_size_gbs"))
+        .map(|value| parse_u64(value, "boot_volume_gbs"))
+        .transpose()?;
+    let retry_interval_secs = params
+        .get("retry_interval_secs")
+        .map(|value| parse_u64(value, "retry_interval_secs"))
+        .transpose()?;
+
+    Ok(CreateInput {
+        profile,
+        compartment: params.get("compartment").cloned(),
+        subnet: params.get("subnet").cloned(),
+        shape: params.get("shape").cloned(),
+        ocpus,
+        memory_in_gbs,
+        boot_volume_size_gbs,
+        availability_domain: params.get("availability_domain").cloned(),
+        image: params.get("image").cloned(),
+        image_os: params.get("image_os").cloned(),
+        image_version: params.get("image_version").cloned(),
+        display_name: params.get("display_name").cloned(),
+        ssh_key: params.get("ssh_key").cloned(),
+        retry_interval_secs,
+    })
+}
+
+async fn send_bot_message(client: &Client, token: &str, chat_id: i64, text: &str) -> Result<()> {
+    let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+    let payload = serde_json::json!({
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": true,
+    });
+    let response = client.post(url).json(&payload).send().await?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        Err(anyhow::anyhow!(
+            "telegram sendMessage error {}: {}",
+            status,
+            body
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_kv_args_requires_key_value() {
+        let args = vec!["compartment".to_string()];
+        assert!(parse_kv_args(&args).is_err());
+    }
+
+    #[test]
+    fn build_create_input_parses_numbers() {
+        let mut params = HashMap::new();
+        params.insert("ocpus".to_string(), "2".to_string());
+        params.insert("memory_gbs".to_string(), "8".to_string());
+        let input = build_create_input(&params, Some("DEFAULT".to_string())).expect("input");
+        assert_eq!(input.ocpus, Some(2.0));
+        assert_eq!(input.memory_in_gbs, Some(8.0));
+    }
 }

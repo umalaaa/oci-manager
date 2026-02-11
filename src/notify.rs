@@ -4,6 +4,7 @@ use tracing::warn;
 
 use crate::config::{NotificationConfig, Profile};
 use crate::models::InstanceSummary;
+use crate::telegram_bind;
 
 #[derive(Debug, Clone, Copy)]
 pub enum NotifySource {
@@ -21,7 +22,9 @@ pub async fn notify_success(profile: &Profile, instance: &InstanceSummary, sourc
 
     let message = build_message(profile, instance, source);
     if let Some(bot_token) = config.telegram_bot_token.as_deref() {
-        if let Some(chat_id) = config.telegram_chat_id.as_deref() {
+        let bound_chat_id = telegram_bind::load_chat_id().map(|id| id.to_string());
+        let chat_id = bound_chat_id.or_else(|| config.telegram_chat_id.clone());
+        if let Some(chat_id) = chat_id.as_deref() {
             if let Err(err) = send_telegram(bot_token, chat_id, &message).await {
                 warn!("Telegram notification failed: {}", err);
             }
@@ -116,7 +119,9 @@ async fn send_email(config: &NotificationConfig, message: &str) -> Result<()> {
     let to_list = match config.email_to.as_deref() {
         Some(value) => value,
         None => {
-            return Err(anyhow::anyhow!("email_to is required for email notifications"))
+            return Err(anyhow::anyhow!(
+                "email_to is required for email notifications"
+            ))
         }
     };
 
@@ -125,18 +130,11 @@ async fn send_email(config: &NotificationConfig, message: &str) -> Result<()> {
         builder = builder.to(recipient.parse::<Mailbox>()?);
     }
 
-    let subject_prefix = config
-        .email_subject_prefix
-        .as_deref()
-        .unwrap_or("OCI");
+    let subject_prefix = config.email_subject_prefix.as_deref().unwrap_or("OCI");
     let subject = format!("{} instance created", subject_prefix);
     let email = builder.subject(subject).body(message.to_string())?;
 
-    let mut transport = if config
-        .email_use_tls
-        .map(|value| value)
-        .unwrap_or(true)
-    {
+    let mut transport = if config.email_use_tls.unwrap_or(true) {
         AsyncSmtpTransport::<Tokio1Executor>::relay(host)?
     } else {
         AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
@@ -145,10 +143,7 @@ async fn send_email(config: &NotificationConfig, message: &str) -> Result<()> {
 
     if let Some(username) = config.email_username.as_deref() {
         let password = config.email_password.clone().unwrap_or_default();
-        transport = transport.credentials(Credentials::new(
-            username.to_string(),
-            password,
-        ));
+        transport = transport.credentials(Credentials::new(username.to_string(), password));
     }
 
     transport.build().send(email).await?;

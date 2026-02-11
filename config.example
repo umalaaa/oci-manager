@@ -20,13 +20,19 @@ admin_key=change-me-to-a-strong-random-key
 port=9927
 # ssh_public_key=ssh-rsa ... (optional global default)
 
+[global:telegram_bot]
+# telegram_bot_token=123456:ABCDEF
+# Bind chat via Telegram:
+# 1) Start bot, then send /bind <admin_key>
+# 2) Binding stored at data/telegram.json (override with OCI_TELEGRAM_BIND_PATH)
+
+
 # ── Notifications (optional) ────────────────────────────────────
 # You can place these settings at the top level, or under [global:notify].
 # They apply to all profiles unless overridden in a profile section.
 
 [global:notify]
-# telegram_bot_token=123456:ABCDEF
-# telegram_chat_id=123456789
+# Telegram notifications use the bound chat_id from the bot integration.
 # discord_webhook_url=https://discord.com/api/webhooks/xxx/yyy
 # email_smtp_host=smtp.example.com
 # email_smtp_port=587

@@ -53,7 +53,7 @@ pub struct NotificationConfig {
 }
 
 impl NotificationConfig {
-    fn from_props(props: &std::collections::HashMap<String, Option<String>>) -> Result<Self> {
+    pub fn from_props(props: &std::collections::HashMap<String, Option<String>>) -> Result<Self> {
         Ok(Self {
             telegram_bot_token: optional(props, "telegram_bot_token"),
             telegram_chat_id: optional(props, "telegram_chat_id"),
@@ -132,8 +132,8 @@ impl OciConfig {
             }
         }
 
-        // 2. Merge properties from [global:web] and [global:notify]
-        for section_name in ["global:web", "global:notify"] {
+        // 2. Merge properties from [global:web], [global:notify], [global:telegram_bot]
+        for section_name in ["global:web", "global:notify", "global:telegram_bot"] {
             if let Some(section_map) = map
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case(section_name))
@@ -432,8 +432,10 @@ admin_key=secret
         let _ = fs::create_dir_all(&temp_dir);
         let config_path = temp_dir.join("config");
         let content = r#"
-[global:notify]
+[global:telegram_bot]
 telegram_bot_token=bot-token
+
+[global:notify]
 telegram_chat_id=12345
 discord_webhook_url=https://discord.com/api/webhooks/test
 email_smtp_host=smtp.example.com

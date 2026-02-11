@@ -79,10 +79,15 @@ admin_key=change-me-to-a-strong-random-key
 port=9927
 # ssh_public_key=ssh-ed25519 AAAA...         # (optional) global default SSH key
 
+# ── Telegram Integration (optional) ────────
+[global:telegram_bot]
+# telegram_bot_token=123456:ABCDEF
+# Bind chat via Telegram:
+# 1) Start bot, then send /bind <admin_key>
+# 2) Binding stored at data/telegram.json (override with OCI_TELEGRAM_BIND_PATH)
+
 # ── Notifications (optional) ───────────────
 [global:notify]
-# telegram_bot_token=123456:ABCDEF
-# telegram_chat_id=123456789
 # discord_webhook_url=https://discord.com/api/webhooks/xxx/yyy
 # email_smtp_host=smtp.example.com
 # email_smtp_port=587
@@ -151,8 +156,6 @@ Configure optional notifications when an instance is created successfully. These
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `telegram_bot_token` | | Telegram bot token |
-| `telegram_chat_id` | | Chat ID to receive messages |
 | `discord_webhook_url` | | Discord webhook URL |
 | `email_smtp_host` | | SMTP host |
 | `email_smtp_port` | | SMTP port (default: 587) |
@@ -162,6 +165,16 @@ Configure optional notifications when an instance is created successfully. These
 | `email_to` | | Email recipients (comma/semicolon separated) |
 | `email_use_tls` | | Use TLS/STARTTLS (default: true) |
 | `email_subject_prefix` | | Subject prefix (default: `OCI`) |
+
+### `[global:telegram_bot]` — Telegram Integration
+
+Enable Telegram control + notifications using a bot token. Bind a chat to the bot with `/bind <admin_key>`; the chat ID is stored locally and used for notifications.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `telegram_bot_token` | | Telegram bot token |
+
+> **Security:** After 3 failed authorization attempts, the chat ID is blocked. Remove it from `data/telegram.json` to reset.
 
 ### `[DEFAULT]` / `[NAME]` — OCI Profiles
 
@@ -362,8 +375,8 @@ GitHub Actions runs on every push and PR:
 ### Creating a Release
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 ---

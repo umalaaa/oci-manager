@@ -4,6 +4,7 @@ mod logic;
 mod models;
 mod notify;
 mod oci;
+mod telegram_bind;
 mod web;
 
 use anyhow::{bail, Result};
