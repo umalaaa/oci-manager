@@ -375,8 +375,8 @@ GitHub Actions runs on every push and PR:
 ### Creating a Release
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 ---
