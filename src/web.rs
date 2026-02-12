@@ -3178,15 +3178,11 @@ fn ensure_login_method(
     defaults: Option<&ProfileDefaults>,
 ) -> Result<(), String> {
     let ssh_enabled = input.use_ssh_key.unwrap_or(true);
-    let has_value =
-        |value: Option<&String>| -> bool { value.map(|v| !v.trim().is_empty()).unwrap_or(false) };
-    let default_ssh = defaults.and_then(|item| item.ssh_public_key.as_ref());
-    let has_ssh = ssh_enabled && (has_value(input.ssh_key.as_ref()) || has_value(default_ssh));
     let has_root = input
         .root_login
         .or_else(|| defaults.and_then(|item| item.root_login))
         .unwrap_or(false);
-    if has_ssh || has_root {
+    if ssh_enabled || has_root {
         Ok(())
     } else {
         Err("至少选择一种登录方式：SSH 公钥或 Root 登录。".to_string())

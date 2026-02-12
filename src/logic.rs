@@ -127,6 +127,10 @@ pub async fn resolve_create_payload(
     } else {
         None
     };
+    let root_login = input.root_login.or(defaults.root_login).unwrap_or(false);
+    if ssh_key.is_none() && !root_login {
+        bail!("无可用登录方式：未找到 SSH 公钥且 Root 登录未开启，请在配置文件中设置 ssh_public_key 或开启 root_login。");
+    }
 
     let boot_volume_size_gbs = input.boot_volume_size_gbs.or(defaults.boot_volume_size_gbs);
     if let Some(size) = boot_volume_size_gbs {
@@ -137,7 +141,6 @@ pub async fn resolve_create_payload(
 
     let mut ocpus = input.ocpus.or(defaults.ocpus);
     let mut memory_in_gbs = input.memory_in_gbs.or(defaults.memory_in_gbs);
-    let root_login = input.root_login.or(defaults.root_login).unwrap_or(false);
 
     let is_flex = shape.to_uppercase().contains(".FLEX");
 
