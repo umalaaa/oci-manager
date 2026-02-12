@@ -1766,9 +1766,10 @@ fn main_inline_menu() -> serde_json::Value {
         "inline_keyboard": [
             [{ "text": "配置", "callback_data": "profiles" }, { "text": "分区", "callback_data": "compartments" }],
             [{ "text": "预设", "callback_data": "presets" }, { "text": "机型", "callback_data": "shapes" }],
-            [{ "text": "可用区", "callback_data": "availability" }, { "text": "实例", "callback_data": "instances" }],
-            [{ "text": "任务", "callback_data": "tasks" }, { "text": "Root 登录", "callback_data": "root_toggle" }],
-            [{ "text": "SSH 公钥", "callback_data": "ssh_toggle" }, { "text": "帮助", "callback_data": "help" }]
+            [{ "text": "可用区", "callback_data": "availability" }, { "text": "硬盘", "callback_data": "boot_volume" }],
+            [{ "text": "实例", "callback_data": "instances" }, { "text": "任务", "callback_data": "tasks" }],
+            [{ "text": "Root 登录", "callback_data": "root_toggle" }, { "text": "SSH 公钥", "callback_data": "ssh_toggle" }],
+            [{ "text": "帮助", "callback_data": "help" }]
         ]
     })
 }
