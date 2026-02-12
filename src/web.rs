@@ -99,6 +99,7 @@ struct TelegramBotState {
     chat_root_login: Arc<Mutex<HashMap<i64, bool>>>,
     chat_use_ssh_key: Arc<Mutex<HashMap<i64, bool>>>,
     chat_boot_volume_gbs: Arc<Mutex<HashMap<i64, u64>>>,
+    chat_boot_volume_vpus: Arc<Mutex<HashMap<i64, u64>>>,
     chat_instance_cache: Arc<Mutex<HashMap<i64, InstanceListCache>>>,
     compartment_cache: Arc<Mutex<HashMap<i64, Vec<CompartmentItem>>>>,
     last_actions: Arc<Mutex<HashMap<i64, LastAction>>>,
@@ -408,6 +409,8 @@ struct CreateRequest {
     memory_in_gbs: Option<f64>,
     #[serde(rename = "bootVolumeSizeInGBs", alias = "boot_volume_size_gbs")]
     boot_volume_size_gbs: Option<u64>,
+    #[serde(rename = "bootVolumeVpusPerGB", alias = "boot_volume_vpus_per_gb")]
+    boot_volume_vpus_per_gb: Option<u64>,
     availability_domain: Option<String>,
     image: Option<String>,
     image_os: Option<String>,
@@ -433,6 +436,7 @@ async fn create_instance(
         ocpus: payload.ocpus,
         memory_in_gbs: payload.memory_in_gbs,
         boot_volume_size_gbs: payload.boot_volume_size_gbs,
+        boot_volume_vpus_per_gb: payload.boot_volume_vpus_per_gb,
         availability_domain: payload.availability_domain,
         image: payload.image,
         image_os: payload.image_os,
@@ -808,6 +812,7 @@ fn start_telegram_bot_if_configured(state: AppState, notify: &NotificationConfig
         chat_root_login: Arc::new(Mutex::new(HashMap::new())),
         chat_use_ssh_key: Arc::new(Mutex::new(HashMap::new())),
         chat_boot_volume_gbs: Arc::new(Mutex::new(HashMap::new())),
+        chat_boot_volume_vpus: Arc::new(Mutex::new(HashMap::new())),
         chat_instance_cache: Arc::new(Mutex::new(HashMap::new())),
         compartment_cache: Arc::new(Mutex::new(HashMap::new())),
         last_actions: Arc::new(Mutex::new(HashMap::new())),
@@ -1292,6 +1297,40 @@ async fn handle_telegram_callback(
                     keyboard: main_inline_menu(),
                 }
             }
+            "boot_perf" => match handle_boot_perf_menu(state, chat_id) {
+                Ok(reply) => reply,
+                Err(err) => BotReply::Inline {
+                    text: err,
+                    keyboard: main_inline_menu(),
+                },
+            },
+            value if value.starts_with("bvpus_set:") => {
+                let raw = value.trim_start_matches("bvpus_set:");
+                match raw.parse::<u64>() {
+                    Ok(vpus) => {
+                        state
+                            .chat_boot_volume_vpus
+                            .lock()
+                            .unwrap()
+                            .insert(chat_id, vpus);
+                        BotReply::Inline {
+                            text: format!("引导卷性能已设置为 {} VPUs/GB。", vpus),
+                            keyboard: main_inline_menu(),
+                        }
+                    }
+                    Err(_) => BotReply::Inline {
+                        text: "性能值无效。".to_string(),
+                        keyboard: main_inline_menu(),
+                    },
+                }
+            }
+            "bvpus_clear" => {
+                state.chat_boot_volume_vpus.lock().unwrap().remove(&chat_id);
+                BotReply::Inline {
+                    text: "引导卷性能已恢复默认。".to_string(),
+                    keyboard: main_inline_menu(),
+                }
+            }
             value if value.starts_with("shapes_page:") => {
                 let raw = value.trim_start_matches("shapes_page:");
                 match raw.parse::<usize>() {
@@ -1630,9 +1669,13 @@ fn menu_text(state: &TelegramBotState, chat_id: i64) -> String {
         Some(size) => format!("{} GB", size),
         None => "默认".to_string(),
     };
+    let boot_perf = match get_chat_boot_volume_vpus(state, chat_id) {
+        Some(vpus) => format!("{}VPUs", vpus),
+        None => "默认".to_string(),
+    };
     format!(
-        "菜单已加载（Profile: {}，分区: {}，可用区: {}，机型: {}，硬盘: {}，Root 登录: {}，SSH 公钥: {}）。点击按钮操作。",
-        profile, compartment, ad, shape, boot, root_login, use_ssh_key
+        "菜单已加载（Profile: {}，分区: {}，可用区: {}，机型: {}，硬盘: {}，性能: {}，Root 登录: {}，SSH 公钥: {}）。点击按钮操作。",
+        profile, compartment, ad, shape, boot, boot_perf, root_login, use_ssh_key
     )
 }
 
@@ -2168,12 +2211,59 @@ fn boot_volume_inline_menu(selected: Option<u64>, back: Option<&str>) -> serde_j
     }
     let mut tail = Vec::new();
     tail.push(serde_json::json!({ "text": "默认(自动)", "callback_data": "boot_clear" }));
+    tail.push(serde_json::json!({ "text": "性能(VPUs)", "callback_data": "boot_perf" }));
     if let Some(back) = back {
         tail.push(serde_json::json!({ "text": "返回机型", "callback_data": back }));
     }
     tail.push(serde_json::json!({ "text": "返回菜单", "callback_data": "menu" }));
     rows.push(tail);
     serde_json::json!({ "inline_keyboard": rows })
+}
+
+fn boot_perf_inline_menu(selected: Option<u64>) -> serde_json::Value {
+    let options: &[(u64, &str)] = &[
+        (10, "均衡(10)"),
+        (20, "较高(20)"),
+        (30, "超高30"),
+        (40, "超高40"),
+        (60, "超高60"),
+        (80, "超高80"),
+        (120, "超高120"),
+    ];
+    let mut rows = Vec::new();
+    for chunk in options.chunks(3) {
+        let mut row = Vec::new();
+        for (vpus, label) in chunk {
+            let text = if selected == Some(*vpus) {
+                format!("✅ {}", label)
+            } else {
+                label.to_string()
+            };
+            row.push(serde_json::json!({
+                "text": text,
+                "callback_data": format!("bvpus_set:{}", vpus)
+            }));
+        }
+        rows.push(row);
+    }
+    rows.push(vec![
+        serde_json::json!({ "text": "默认(自动)", "callback_data": "bvpus_clear" }),
+        serde_json::json!({ "text": "返回菜单", "callback_data": "menu" }),
+    ]);
+    serde_json::json!({ "inline_keyboard": rows })
+}
+
+fn handle_boot_perf_menu(state: &TelegramBotState, chat_id: i64) -> Result<BotReply, String> {
+    let current = get_chat_boot_volume_vpus(state, chat_id)
+        .map(|v| format!("{} VPUs/GB", v))
+        .unwrap_or_else(|| "默认".to_string());
+    Ok(BotReply::Inline {
+        text: format!(
+            "选择引导卷性能（当前: {}）\n10=均衡 20=较高 30-120=超高性能",
+            current
+        ),
+        keyboard: boot_perf_inline_menu(get_chat_boot_volume_vpus(state, chat_id)),
+    })
 }
 
 fn is_authorized(state: &TelegramBotState, chat_id: i64) -> bool {
@@ -2957,6 +3047,11 @@ fn get_chat_boot_volume_gbs(state: &TelegramBotState, chat_id: i64) -> Option<u6
     values.get(&chat_id).cloned()
 }
 
+fn get_chat_boot_volume_vpus(state: &TelegramBotState, chat_id: i64) -> Option<u64> {
+    let values = state.chat_boot_volume_vpus.lock().unwrap();
+    values.get(&chat_id).cloned()
+}
+
 fn format_shape_selection(state: &TelegramBotState, chat_id: i64) -> String {
     let Some(shape) = get_chat_shape_label(state, chat_id) else {
         return "自动".to_string();
@@ -3097,6 +3192,11 @@ fn build_create_input(
         .or_else(|| params.get("boot_volume_size_gbs"))
         .map(|value| parse_u64(value, "boot_volume_gbs"))
         .transpose()?;
+    let boot_volume_vpus_per_gb = params
+        .get("boot_volume_vpus")
+        .or_else(|| params.get("boot_volume_vpus_per_gb"))
+        .map(|value| parse_u64(value, "boot_volume_vpus"))
+        .transpose()?;
     let retry_interval_secs = params
         .get("retry_interval_secs")
         .map(|value| parse_u64(value, "retry_interval_secs"))
@@ -3120,6 +3220,7 @@ fn build_create_input(
         ocpus,
         memory_in_gbs,
         boot_volume_size_gbs,
+        boot_volume_vpus_per_gb,
         availability_domain: params.get("availability_domain").cloned(),
         image: params.get("image").cloned(),
         image_os: params.get("image_os").cloned(),
@@ -3146,6 +3247,11 @@ fn apply_chat_defaults(state: &TelegramBotState, chat_id: i64, input: &mut Creat
     if input.boot_volume_size_gbs.is_none() {
         if let Some(size) = get_chat_boot_volume_gbs(state, chat_id) {
             input.boot_volume_size_gbs = Some(size);
+        }
+    }
+    if input.boot_volume_vpus_per_gb.is_none() {
+        if let Some(vpus) = get_chat_boot_volume_vpus(state, chat_id) {
+            input.boot_volume_vpus_per_gb = Some(vpus);
         }
     }
     if input.ocpus.is_none() {
@@ -3274,6 +3380,9 @@ fn apply_preset_to_input(profile_key: &str, input: &mut CreateInput, preset: &Pr
     }
     if input.boot_volume_size_gbs.is_none() {
         input.boot_volume_size_gbs = preset.boot_volume_size_gbs;
+    }
+    if input.boot_volume_vpus_per_gb.is_none() {
+        input.boot_volume_vpus_per_gb = preset.boot_volume_vpus_per_gb;
     }
     if input.ocpus.is_none() {
         input.ocpus = preset.ocpus;

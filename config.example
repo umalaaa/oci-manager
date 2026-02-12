@@ -61,6 +61,7 @@ key_file=/path/to/your/oci_api_key.pem
 # root_login=true
 # display_name_prefix=auto
 # boot_volume_size_gbs=50
+# boot_volume_vpus_per_gb=10
 
 # ─────────────────────────────────────────────────────────────────
 # Additional Profiles

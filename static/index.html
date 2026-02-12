@@ -228,6 +228,19 @@
             <input id="bootVolumeSize" placeholder="Default" />
           </div>
           <div>
+            <label data-i18n="boot_perf">Boot Volume Performance (VPUs/GB)</label>
+            <select id="bootVolumeVpus">
+              <option value="">Default</option>
+              <option value="10">10 - Balanced</option>
+              <option value="20">20 - Higher Performance</option>
+              <option value="30">30 - Ultra High</option>
+              <option value="40">40 - Ultra High</option>
+              <option value="60">60 - Ultra High</option>
+              <option value="80">80 - Ultra High</option>
+              <option value="120">120 - Ultra High</option>
+            </select>
+          </div>
+          <div>
             <label data-i18n="image_os">Image OS / Version</label>
             <div class="inline">
               <select id="imageOs" onchange="onImageOsChange()">
@@ -335,6 +348,7 @@
         memory: "Memory (GB, Flex)",
         image_ocid: "Image OCID",
         boot_vol: "Boot Volume Size (GB, optional)",
+        boot_perf: "Boot Volume Performance (VPUs/GB)",
         image_os: "Image OS / Version",
         display_name: "Display Name",
         ssh_key: "SSH Public Key",
@@ -401,6 +415,7 @@
         memory: "内存 (GB, Flex)",
         image_ocid: "镜像 OCID",
         boot_vol: "启动卷大小 (GB, 可选)",
+        boot_perf: "引导卷性能 (VPUs/GB)",
         image_os: "镜像系统 / 版本",
         display_name: "实例名称",
         ssh_key: "SSH 公钥",
@@ -585,6 +600,7 @@
         ocpus: numberValue("ocpus"),
         memoryInGBs: numberValue("memoryInGBs"),
         bootVolumeSizeInGBs: numberValue("bootVolumeSize"),
+        bootVolumeVpusPerGB: numberValue("bootVolumeVpus"),
         image: value("image"),
         image_os: value("imageOs"),
         image_version: value("imageVersion"),
@@ -1019,6 +1035,7 @@
           setField('imageVersion', d.image_version);
         }
         if (d.boot_volume_size_gbs) setField('bootVolumeSize', d.boot_volume_size_gbs);
+        if (d.boot_volume_vpus_per_gb) setField('bootVolumeVpus', d.boot_volume_vpus_per_gb);
         if (d.root_login != null) setChecked('rootLogin', d.root_login);
         if (d.display_name_prefix) {
           const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -1236,6 +1253,7 @@
 
       setField('image', preset.image);
       setField('bootVolumeSize', preset.boot_volume_size_gbs);
+      setField('bootVolumeVpus', preset.boot_volume_vpus_per_gb);
 
       // Image OS and Version — set OS first, trigger version population, then set version
       if (preset.image_os) {

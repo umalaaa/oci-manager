@@ -24,6 +24,7 @@ pub struct CreateInput {
     pub ocpus: Option<f64>,
     pub memory_in_gbs: Option<f64>,
     pub boot_volume_size_gbs: Option<u64>,
+    pub boot_volume_vpus_per_gb: Option<u64>,
     pub availability_domain: Option<String>,
     pub image: Option<String>,
     pub image_os: Option<String>,
@@ -138,6 +139,9 @@ pub async fn resolve_create_payload(
             bail!("boot volume size must be greater than 0");
         }
     }
+    let boot_volume_vpus_per_gb = input
+        .boot_volume_vpus_per_gb
+        .or(defaults.boot_volume_vpus_per_gb);
 
     let mut ocpus = input.ocpus.or(defaults.ocpus);
     let mut memory_in_gbs = input.memory_in_gbs.or(defaults.memory_in_gbs);
@@ -209,6 +213,9 @@ pub async fn resolve_create_payload(
 
     if let Some(size) = boot_volume_size_gbs {
         payload["sourceDetails"]["bootVolumeSizeInGBs"] = json!(size);
+    }
+    if let Some(vpus) = boot_volume_vpus_per_gb {
+        payload["sourceDetails"]["bootVolumeVpusPerGB"] = json!(vpus);
     }
 
     let mut root_password = None;

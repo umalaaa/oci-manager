@@ -114,6 +114,7 @@ key_file=/path/to/oci_api_key.pem
 # ssh_public_key=/path/to/id_rsa.pub
 # display_name_prefix=auto
 # boot_volume_size_gbs=50
+# boot_volume_vpus_per_gb=10
 # ocpus=1
 # memory_in_gbs=6
 
@@ -194,6 +195,7 @@ OCI credentials. `[DEFAULT]` is used when no `--profile` is specified.
 | `ssh_public_key` | | SSH public key (path or inline) |
 | `display_name_prefix` | | Prefix for auto-generated names |
 | `boot_volume_size_gbs` | | Boot volume size in GB |
+| `boot_volume_vpus_per_gb` | | Boot volume performance (10=Balanced, 20=Higher, 30-120=Ultra High) |
 | `ocpus` | | Default OCPUs (Flex shapes) |
 | `memory_in_gbs` | | Default memory in GB (Flex shapes) |
 

@@ -56,6 +56,8 @@ pub struct InstanceCreateArgs {
     pub memory_in_gbs: Option<f64>,
     #[arg(long = "boot-volume-gbs")]
     pub boot_volume_size_gbs: Option<u64>,
+    #[arg(long = "boot-volume-vpus")]
+    pub boot_volume_vpus_per_gb: Option<u64>,
     #[arg(long = "availability-domain")]
     pub availability_domain: Option<String>,
     #[arg(long)]
@@ -128,6 +130,8 @@ pub struct CronArgs {
     pub memory_in_gbs: Option<f64>,
     #[arg(long = "boot-volume-gbs")]
     pub boot_volume_size_gbs: Option<u64>,
+    #[arg(long = "boot-volume-vpus")]
+    pub boot_volume_vpus_per_gb: Option<u64>,
     #[arg(long = "availability-domain")]
     pub availability_domain: Option<String>,
     #[arg(long)]

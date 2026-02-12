@@ -161,6 +161,7 @@ async fn handle_instance(command: InstanceCommand, client: &OciClient) -> Result
                     ocpus: args.ocpus,
                     memory_in_gbs: args.memory_in_gbs,
                     boot_volume_size_gbs: args.boot_volume_size_gbs,
+                    boot_volume_vpus_per_gb: args.boot_volume_vpus_per_gb,
                     availability_domain: args.availability_domain.clone(),
                     image: args.image.clone(),
                     image_os: args.image_os.clone(),
@@ -299,6 +300,9 @@ async fn handle_cron(args: CronArgs, client: &OciClient, config: &OciConfig) -> 
             boot_volume_size_gbs: args
                 .boot_volume_size_gbs
                 .or_else(|| preset.and_then(|p| p.boot_volume_size_gbs)),
+            boot_volume_vpus_per_gb: args
+                .boot_volume_vpus_per_gb
+                .or_else(|| preset.and_then(|p| p.boot_volume_vpus_per_gb)),
             availability_domain: args
                 .availability_domain
                 .clone()
