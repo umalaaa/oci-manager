@@ -443,7 +443,8 @@ async fn create_instance(
         root_login: payload.root_login,
         retry_interval_secs: None,
     };
-    ensure_login_method(&input).map_err(|err| (StatusCode::BAD_REQUEST, err))?;
+    ensure_login_method(&input, Some(&profile.defaults))
+        .map_err(|err| (StatusCode::BAD_REQUEST, err))?;
     let resolved = resolve_create_payload(&profile.client, &profile.defaults, input, false)
         .await
         .map_err(internal_error)?;
@@ -2806,7 +2807,7 @@ fn handle_queue_command(
     let inputs = expand_inputs_with_availability(state, chat_id, input);
     let mut lines = Vec::new();
     for input in inputs {
-        ensure_login_method(&input)?;
+        ensure_login_method(&input, Some(&profile_state.defaults))?;
         let ad = input
             .availability_domain
             .clone()
@@ -3172,15 +3173,19 @@ fn apply_chat_defaults(state: &TelegramBotState, chat_id: i64, input: &mut Creat
     }
 }
 
-fn ensure_login_method(input: &CreateInput) -> Result<(), String> {
+fn ensure_login_method(
+    input: &CreateInput,
+    defaults: Option<&ProfileDefaults>,
+) -> Result<(), String> {
     let ssh_enabled = input.use_ssh_key.unwrap_or(true);
-    let has_ssh = ssh_enabled
-        && input
-            .ssh_key
-            .as_ref()
-            .map(|v| !v.trim().is_empty())
-            .unwrap_or(false);
-    let has_root = input.root_login.unwrap_or(false);
+    let has_value =
+        |value: Option<&String>| -> bool { value.map(|v| !v.trim().is_empty()).unwrap_or(false) };
+    let default_ssh = defaults.and_then(|item| item.ssh_public_key.as_ref());
+    let has_ssh = ssh_enabled && (has_value(input.ssh_key.as_ref()) || has_value(default_ssh));
+    let has_root = input
+        .root_login
+        .or_else(|| defaults.and_then(|item| item.root_login))
+        .unwrap_or(false);
     if has_ssh || has_root {
         Ok(())
     } else {
@@ -3326,7 +3331,7 @@ async fn preset_action(
     let inputs = expand_inputs_with_availability(state, chat_id, input);
     let mut lines = Vec::new();
     for input in inputs {
-        ensure_login_method(&input)?;
+        ensure_login_method(&input, Some(&profile_state.defaults))?;
         let ad = input
             .availability_domain
             .clone()
