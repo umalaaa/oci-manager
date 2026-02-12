@@ -1820,7 +1820,7 @@ fn availability_inline_menu(ads: &[AvailabilityDomain], selected: &[String]) -> 
 const SHAPE_PAGE_SIZE: usize = 12;
 
 fn shapes_inline_menu(shapes: &[Shape], selected: Option<&str>, page: usize) -> serde_json::Value {
-    let total_pages = (shapes.len() + SHAPE_PAGE_SIZE - 1) / SHAPE_PAGE_SIZE;
+    let total_pages = shapes.len().div_ceil(SHAPE_PAGE_SIZE);
     let page = page.min(total_pages.saturating_sub(1));
     let start = page * SHAPE_PAGE_SIZE;
     let end = (start + SHAPE_PAGE_SIZE).min(shapes.len());
@@ -1939,7 +1939,7 @@ fn paginate_values(values: &[u32], page: usize) -> (Vec<u32>, usize) {
     if values.is_empty() {
         return (Vec::new(), 0);
     }
-    let total_pages = (values.len() + FLEX_PAGE_SIZE - 1) / FLEX_PAGE_SIZE;
+    let total_pages = values.len().div_ceil(FLEX_PAGE_SIZE);
     let page = page.min(total_pages.saturating_sub(1));
     let start = page * FLEX_PAGE_SIZE;
     let end = (start + FLEX_PAGE_SIZE).min(values.len());
@@ -2536,7 +2536,7 @@ async fn handle_shapes_menu_page(
         text.push('\n');
         text.push_str(&note);
     }
-    let total_pages = (shapes.len() + SHAPE_PAGE_SIZE - 1) / SHAPE_PAGE_SIZE;
+    let total_pages = shapes.len().div_ceil(SHAPE_PAGE_SIZE);
     if total_pages > 1 {
         text.push_str(&format!("\n页码: {}/{}", page + 1, total_pages));
     }

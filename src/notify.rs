@@ -108,7 +108,7 @@ fn record_root_password(
         .create(true)
         .append(true)
         .open("data/root-passwords.log")?;
-    writeln!(file, "{}", entry.to_string())?;
+    writeln!(file, "{}", entry)?;
     Ok(())
 }
 
